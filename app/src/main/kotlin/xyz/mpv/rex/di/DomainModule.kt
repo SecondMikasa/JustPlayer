@@ -26,6 +26,7 @@ val domainModule = module {
     single { PlaybackManager(get()) }
     single { MiniPlayerStateManager() }
     single { HeadlessPlaybackController(androidContext()) }
+    single { xyz.mpv.rex.utils.media.AudioEqualizerManager() }
 }
 
 

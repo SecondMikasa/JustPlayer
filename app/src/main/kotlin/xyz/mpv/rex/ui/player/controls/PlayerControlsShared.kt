@@ -45,6 +45,7 @@ import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material.icons.filled.ShuffleOn
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Subtitles
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOutMap
 import androidx.compose.material.icons.filled.Flip
@@ -1255,6 +1256,60 @@ fun RenderPlayerButton(
             Icon(
               imageVector = Icons.Outlined.Timer,
               contentDescription = stringResource(R.string.sleep_timer),
+              tint = if (isActive) activeContentColor else contentColor,
+              modifier = Modifier.size(24.dp),
+            )
+          }
+        }
+      }
+    }
+
+    PlayerButton.EQUALIZER -> {
+      val equalizerState by viewModel.equalizerState.collectAsState()
+      val isActive = equalizerState.isEnabled
+      
+      if (isMoreSheet) {
+          Surface(
+            shape = CircleShape,
+            color = if (isActive) activeSurfaceColor else surfaceColor,
+            contentColor = if (isActive) activeContentColor else contentColor,
+            border = if (isActive) activeBorderColor else borderColor,
+            modifier = Modifier
+              .height(buttonSize)
+              .clip(CircleShape)
+              .clickable { onOpenSheet(Sheets.Equalizer) }
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+              modifier = Modifier.padding(horizontal = MaterialTheme.spacing.smaller)
+            ) {
+              Icon(
+                imageVector = Icons.Default.Tune,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
+              )
+              Text(
+                text = stringResource(R.string.btn_label_equalizer),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+              )
+            }
+          }
+      } else {
+        Surface(
+          shape = CircleShape,
+          color = if (isActive) activeSurfaceColor else surfaceColor,
+          border = if (isActive) activeBorderColor else borderColor,
+          modifier = Modifier
+            .size(buttonSize)
+            .clip(CircleShape)
+            .clickable(onClick = { onOpenSheet(Sheets.Equalizer) }),
+        ) {
+          Box(contentAlignment = Alignment.Center) {
+            Icon(
+              imageVector = Icons.Default.Tune,
+              contentDescription = stringResource(R.string.btn_label_equalizer),
               tint = if (isActive) activeContentColor else contentColor,
               modifier = Modifier.size(24.dp),
             )

@@ -17,6 +17,11 @@ class AudioPreferences(
   val volumeNormalization = preferenceStore.getBoolean("audio_volume_normalization", false)
   val pickerPath = preferenceStore.getString("audio_picker_path")
   val openPickerAtVideoLocation = preferenceStore.getBoolean("audio_open_at_video_location", true)
+
+  val equalizerEnabled = preferenceStore.getBoolean("equalizer_enabled", false)
+  val equalizerPreset = preferenceStore.getString("equalizer_preset", "FLAT")
+  val equalizerGains = preferenceStore.getString("equalizer_gains", "0,0,0,0,0")
+  val equalizerVolumeBoost = preferenceStore.getInt("equalizer_volume_boost", 0)
 }
 
 enum class AudioChannels(

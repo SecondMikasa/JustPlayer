@@ -15,6 +15,7 @@ import androidx.compose.material.icons.outlined.ScreenRotation
 import androidx.compose.material.icons.outlined.Speed
 import androidx.compose.material.icons.outlined.Subtitles
 import androidx.compose.material.icons.outlined.Title
+import androidx.compose.material.icons.outlined.Tune
 import androidx.compose.material.icons.outlined.Flip
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.ZoomIn
@@ -59,6 +60,7 @@ enum class PlayerButton(
   BACKGROUND_PLAYBACK(Icons.Outlined.Headset),
   AMBIENT_MODE(Icons.Outlined.BlurOn),
   SLEEP_TIMER(Icons.Outlined.Timer),
+  EQUALIZER(Icons.Outlined.Tune),
   NONE(Icons.Outlined.Bookmarks),
 }
 
@@ -103,5 +105,6 @@ fun getPlayerButtonLabel(button: PlayerButton): String =
     PlayerButton.BACKGROUND_PLAYBACK -> stringResource(R.string.btn_label_background_playback)
     PlayerButton.AMBIENT_MODE -> stringResource(R.string.btn_label_ambient_mode)
     PlayerButton.SLEEP_TIMER -> stringResource(R.string.btn_label_sleep_timer)
+    PlayerButton.EQUALIZER -> stringResource(R.string.btn_label_equalizer)
     PlayerButton.NONE -> stringResource(R.string.btn_label_none)
   }

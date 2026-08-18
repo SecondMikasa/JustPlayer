@@ -59,7 +59,7 @@ class AudioEqualizerManager {
 
     try {
       loudnessEnhancer?.let { enhancer ->
-        if (enabled && volumeBoostDb > 0) {
+        if (enabled && (volumeBoostDb > 0)) {
           enhancer.setTargetGain(volumeBoostDb * 100)
           enhancer.enabled = true
         } else {

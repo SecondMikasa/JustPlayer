@@ -259,7 +259,7 @@ private fun PresetChip(
             },
           ),
           RoundedCornerShape(50),
-        ).then(if (isEnabled && onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
+        ).then(if (isEnabled && (onClick != null)) Modifier.clickable(onClick = onClick) else Modifier)
         .padding(horizontal = 16.dp, vertical = 8.dp),
   ) {
     Text(
@@ -290,7 +290,7 @@ private fun BandColumn(
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
     val displayGain = sliderValue.roundToInt()
-    val gainText = if (displayGain > 0) "+$displayGain" else "$displayGain"
+    val gainText = if (displayGain > 0) "+$displayGain" else displayGain.toString()
     Text(
       text = gainText,
       style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold),

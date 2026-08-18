@@ -117,6 +117,7 @@ enum class Sheets {
   FrameNavigation,
   CustomSkipDuration,
   SleepTimer,
+  Equalizer,
 }
 
 enum class Panels {

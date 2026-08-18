@@ -100,6 +100,7 @@ class PlayerViewModel(
 
   private val browserPreferences: xyz.mpv.rex.preferences.BrowserPreferences by inject()
   private val miniPlayerStateManager: MiniPlayerStateManager by inject()
+  private val audioEqualizerManager: xyz.mpv.rex.utils.media.AudioEqualizerManager by inject()
 
   // Cache the application context to prevent leaking the Activity context
   private val appContext = host.context.applicationContext
@@ -168,6 +169,17 @@ class PlayerViewModel(
   // Playlist items for the playlist sheet
   private val _playlistItems = kotlinx.coroutines.flow.MutableStateFlow<List<xyz.mpv.rex.ui.player.controls.components.sheets.PlaylistItem>>(emptyList())
   val playlistItems: kotlinx.coroutines.flow.StateFlow<List<xyz.mpv.rex.ui.player.controls.components.sheets.PlaylistItem>> = _playlistItems.asStateFlow()
+
+  // Whether the currently loaded media is audio-only (no video track). Set once per
+  // file load from PlayerActivity.handleFileLoaded(), which already computes this via
+  // isCurrentMediaAudio(). Drives the PlayerControls vs AudioPlayerControls switch in
+  // PlayerActivity.setupPlayerControls().
+  private val _isAudioMedia = MutableStateFlow(false)
+  val isAudioMedia: StateFlow<Boolean> = _isAudioMedia.asStateFlow()
+
+  fun setIsAudioMedia(isAudio: Boolean) {
+    _isAudioMedia.value = isAudio
+  }
 
   fun toggleOnlineSection() = _subtitleManager.toggleOnlineSection()
 
@@ -288,6 +300,49 @@ class PlayerViewModel(
 
   private val _totalFrames = MutableStateFlow(0)
   val totalFrames: StateFlow<Int> = _totalFrames.asStateFlow()
+
+  // Equalizer State
+  private val _equalizerState = MutableStateFlow(loadEqualizerState())
+  val equalizerState = _equalizerState.asStateFlow()
+
+  private fun loadEqualizerState(): EqualizerState {
+    val enabled = audioPreferences.equalizerEnabled.get()
+    val presetName = audioPreferences.equalizerPreset.get()
+    val preset = EqualizerPreset.entries.find { it.name == presetName } ?: EqualizerPreset.FLAT
+    val gainsStr = audioPreferences.equalizerGains.get()
+    val gains = gainsStr.split(",").mapNotNull { it.toIntOrNull() }.takeIf { it.size == 5 } ?: List(5) { 0 }
+    val boost = audioPreferences.equalizerVolumeBoost.get()
+    return EqualizerState(enabled, preset, gains, boost)
+  }
+
+  fun updateEqualizerEnabled(enabled: Boolean) {
+    _equalizerState.update { it.copy(isEnabled = enabled) }
+    audioPreferences.equalizerEnabled.set(enabled)
+  }
+
+  fun updateEqualizerPreset(preset: EqualizerPreset) {
+    _equalizerState.update { it.copy(currentPreset = preset, bandGains = preset.gains) }
+    audioPreferences.equalizerPreset.set(preset.name)
+    audioPreferences.equalizerGains.set(preset.gains.joinToString(","))
+  }
+
+  fun updateEqualizerBand(index: Int, gainDb: Int) {
+    _equalizerState.update {
+      val newGains = it.bandGains.toMutableList()
+      if (index in newGains.indices) {
+        newGains[index] = gainDb
+      }
+      it.copy(bandGains = newGains, currentPreset = EqualizerPreset.CUSTOM)
+    }
+    val state = _equalizerState.value
+    audioPreferences.equalizerGains.set(state.bandGains.joinToString(","))
+    audioPreferences.equalizerPreset.set(EqualizerPreset.CUSTOM.name)
+  }
+
+  fun updateEqualizerVolumeBoost(boostDb: Int) {
+    _equalizerState.update { it.copy(volumeBoostDb = boostDb) }
+    audioPreferences.equalizerVolumeBoost.set(boostDb)
+  }
 
   private val _isFrameNavigationExpanded = MutableStateFlow(false)
   val isFrameNavigationExpanded: StateFlow<Boolean> = _isFrameNavigationExpanded.asStateFlow()
@@ -438,6 +493,14 @@ class PlayerViewModel(
         }.onFailure { e ->
           Log.e(TAG, "Error setting volume-max: $maxVol", e)
         }
+      }
+    }
+
+    // Initialize and observe Equalizer state
+    audioEqualizerManager.initSession(0)
+    viewModelScope.launch {
+      equalizerState.collect { state ->
+        audioEqualizerManager.updateState(state.isEnabled, state.bandGains, state.volumeBoostDb)
       }
     }
 
@@ -2270,6 +2333,7 @@ class PlayerViewModel(
     super.onCleared()
     _screenStateManager.cleanup()
     ambientModeManager.cleanup()
+    audioEqualizerManager.release()
   }
 }
 

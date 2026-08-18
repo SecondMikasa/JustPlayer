@@ -27,6 +27,7 @@ import xyz.mpv.rex.ui.player.controls.components.sheets.PlaybackSpeedSheet
 import xyz.mpv.rex.ui.player.controls.components.sheets.PlaylistSheet
 import xyz.mpv.rex.ui.player.controls.components.sheets.SubtitlesSheet
 import xyz.mpv.rex.ui.player.controls.components.sheets.OnlineSubtitleSearchSheet
+import xyz.mpv.rex.ui.player.controls.components.sheets.EqualizerSheet
 import xyz.mpv.rex.utils.media.MediaInfoParser
 import dev.vivvvek.seeker.Segment
 import kotlinx.collections.immutable.ImmutableList
@@ -484,6 +485,18 @@ fun PlayerSheets(
         remainingTime = sleepTimerTimeRemaining,
         onStartTimer = onStartSleepTimer,
         onDismissRequest = onDismissRequest,
+      )
+    }
+
+    Sheets.Equalizer -> {
+      val equalizerState by viewModel.equalizerState.composeCollectAsState()
+      EqualizerSheet(
+        state = equalizerState,
+        onEnabledChanged = viewModel::updateEqualizerEnabled,
+        onPresetSelected = viewModel::updateEqualizerPreset,
+        onBandChanged = viewModel::updateEqualizerBand,
+        onVolumeBoostChanged = viewModel::updateEqualizerVolumeBoost,
+        onDismissRequest = onDismissRequest
       )
     }
   }

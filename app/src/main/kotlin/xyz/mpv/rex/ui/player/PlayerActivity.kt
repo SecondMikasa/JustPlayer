@@ -28,6 +28,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
@@ -53,6 +55,7 @@ import xyz.mpv.rex.preferences.SubtitlesPreferences
 import xyz.mpv.rex.preferences.FolderSortType
 import xyz.mpv.rex.preferences.SortOrder
 import xyz.mpv.rex.database.repository.VideoMetadataCacheRepository
+import xyz.mpv.rex.ui.player.controls.AudioPlayerControls
 import xyz.mpv.rex.ui.player.controls.PlayerControls
 import xyz.mpv.rex.ui.theme.MpvexPlayerTheme
 import xyz.mpv.rex.utils.history.RecentlyPlayedOps
@@ -614,13 +617,24 @@ class PlayerActivity :
   private fun setupPlayerControls() {
     binding.controls.setContent {
       MpvexPlayerTheme {
-        PlayerControls(
-          viewModel = viewModel,
-          onBackPress = {
-            handleBackPress()
-          },
-          modifier = Modifier,
-        )
+        val isAudioMedia by viewModel.isAudioMedia.collectAsState()
+        if (isAudioMedia) {
+          AudioPlayerControls(
+            viewModel = viewModel,
+            onBackPress = {
+              handleBackPress()
+            },
+            modifier = Modifier,
+          )
+        } else {
+          PlayerControls(
+            viewModel = viewModel,
+            onBackPress = {
+              handleBackPress()
+            },
+            modifier = Modifier,
+          )
+        }
       }
     }
   }
@@ -845,7 +859,6 @@ class PlayerActivity :
     super.onPause()
   }
 
-  @RequiresApi(Build.VERSION_CODES.P)
   override fun finish() {
     runCatching {
       if (!isManualBackgroundPlayback) {
@@ -871,7 +884,6 @@ class PlayerActivity :
     super.finish()
   }
 
-  @RequiresApi(Build.VERSION_CODES.P)
   override fun finishAndRemoveTask() {
     runCatching {
       if (!isManualBackgroundPlayback) {
@@ -1011,15 +1023,16 @@ class PlayerActivity :
         if (playerPreferences.showSystemStatusBar.get()) 0 else View.SYSTEM_UI_FLAG_LOW_PROFILE
   }
 
-  @RequiresApi(Build.VERSION_CODES.P)
   private fun restoreSystemUI() {
     // Clear flags first for immediate effect
     // window.clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
     window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
     // Set cutout mode before showing bars for smoother transition
-    window.attributes.layoutInDisplayCutoutMode =
-      WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      window.attributes.layoutInDisplayCutoutMode =
+        WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_DEFAULT
+    }
 
     // Update window insets configuration
     // WindowCompat.setDecorFitsSystemWindows(window, true)
@@ -1883,6 +1896,7 @@ class PlayerActivity :
 
     // Set the background playback toggle button default based on BackgroundPlaybackMode preference
     val isAudio = isCurrentMediaAudio()
+    viewModel.setIsAudioMedia(isAudio)
     val defaultBgPlayback = when (playerPreferences.backgroundPlayback.get()) {
       BackgroundPlaybackMode.Always -> true
       BackgroundPlaybackMode.AudioOnly -> isAudio
@@ -3162,7 +3176,6 @@ class PlayerActivity :
    * Manually triggers background playback when the user clicks the background playback button.
    * This works independently of the BackgroundPlaybackMode preference.
    */
-  @RequiresApi(Build.VERSION_CODES.P)
   fun triggerBackgroundPlayback() {
     if (fileName.isBlank() || !isReady) {
       Log.w(TAG, "Cannot trigger background playback: video not ready")
@@ -3401,7 +3414,7 @@ class PlayerActivity :
         if (!video.isAudio) {
           val durationMs = retriever.extractMetadata(android.media.MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
           val seekUs = if (durationMs > 2000L) 1_000_000L else 0L
-          val frame = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+          val frame = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             runCatching { retriever.getScaledFrameAtTime(seekUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC, 256, 256) }.getOrNull()
           } else null
           val fallbackFrame = frame ?: retriever.getFrameAtTime(seekUs, android.media.MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
