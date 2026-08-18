@@ -21,6 +21,7 @@ import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -50,6 +51,7 @@ import xyz.mpv.rex.preferences.BrowserPreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.browser.folderlist.FolderListScreen
+import xyz.mpv.rex.ui.browser.music.MusicLibraryScreen
 import xyz.mpv.rex.ui.browser.networkstreaming.NetworkStreamingScreen
 import xyz.mpv.rex.ui.browser.playlist.PlaylistScreen
 import xyz.mpv.rex.ui.browser.recentlyplayed.RecentlyPlayedScreen
@@ -165,16 +167,18 @@ object MainScreen : Screen {
     val enableTabRecents by browserPreferences.enableTabRecents.collectAsState()
     val enableTabPlaylists by browserPreferences.enableTabPlaylists.collectAsState()
     val enableTabNetwork by browserPreferences.enableTabNetwork.collectAsState()
+    val enableTabMusic by browserPreferences.enableTabMusic.collectAsState()
 
     val homeLabel = stringResource(R.string.home)
     val shortsLabel = stringResource(R.string.shorts)
     val recentsLabel = stringResource(R.string.recents)
     val playlistsLabel = stringResource(R.string.playlists)
     val networkLabel = stringResource(R.string.network)
+    val musicLabel = stringResource(R.string.music)
 
     val visibleTabs = remember(
-      isShortsEnabled, enableTabRecents, enableTabPlaylists, enableTabNetwork,
-      homeLabel, shortsLabel, recentsLabel, playlistsLabel, networkLabel
+      isShortsEnabled, enableTabRecents, enableTabPlaylists, enableTabNetwork, enableTabMusic,
+      homeLabel, shortsLabel, recentsLabel, playlistsLabel, networkLabel, musicLabel
     ) {
       buildList {
         add(
@@ -200,6 +204,13 @@ object MainScreen : Screen {
           add(
             VisibleTab("playlists", playlistsLabel, Icons.AutoMirrored.Filled.PlaylistPlay) {
               PlaylistScreen.Content()
+            }
+          )
+        }
+        if (enableTabMusic) {
+          add(
+            VisibleTab("music", musicLabel, Icons.Filled.LibraryMusic) {
+              MusicLibraryScreen.Content()
             }
           )
         }

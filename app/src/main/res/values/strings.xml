@@ -25,6 +25,8 @@
     <string name="pref_appearance_tab_playlists_summary">Show local custom video playlists</string>
     <string name="pref_appearance_tab_network_title">Network Streaming</string>
     <string name="pref_appearance_tab_network_summary">Access SMB, FTP, and WebDAV drives</string>
+    <string name="pref_appearance_tab_music_title">Music</string>
+    <string name="pref_appearance_tab_music_summary">Browse audio files as Songs, Albums, and Artists</string>
     <string name="pref_appearance_summary">Dark mode, Material You</string>
     <string name="pref_appearance_category_theme">Theme</string>
     <string name="pref_appearance_darkmode_system">System</string>
@@ -706,6 +708,11 @@
     <string name="shorts">Shorts</string>
     <string name="recents">Recents</string>
     <string name="playlists">Playlists</string>
+    <string name="music">Music</string>
+    <string name="search">Search</string>
+    <string name="no_songs_found">No songs found</string>
+    <string name="no_albums_found">No albums found</string>
+    <string name="no_artists_found">No artists found</string>
     <string name="network">Network</string>
     <string name="unit_seconds">Seconds</string>
     <string name="milliseconds">Milliseconds</string>

@@ -349,6 +349,7 @@ object AppearancePreferencesScreen : Screen {
                             val enableTabRecents by browserPreferences.enableTabRecents.collectAsState()
                             val enableTabPlaylists by browserPreferences.enableTabPlaylists.collectAsState()
                             val enableTabNetwork by browserPreferences.enableTabNetwork.collectAsState()
+                            val enableTabMusic by browserPreferences.enableTabMusic.collectAsState()
 
                             SwitchPreference(
                                 value = enableShorts,
@@ -415,6 +416,24 @@ object AppearancePreferencesScreen : Screen {
                                 summary = {
                                     Text(
                                         text = stringResource(id = R.string.pref_appearance_tab_network_summary),
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                }
+                            )
+
+                            PreferenceDivider()
+
+                            SwitchPreference(
+                                value = enableTabMusic,
+                                onValueChange = { browserPreferences.enableTabMusic.set(it) },
+                                title = {
+                                    Text(
+                                        text = stringResource(id = R.string.pref_appearance_tab_music_title),
+                                    )
+                                },
+                                summary = {
+                                    Text(
+                                        text = stringResource(id = R.string.pref_appearance_tab_music_summary),
                                         color = MaterialTheme.colorScheme.outline,
                                     )
                                 }
