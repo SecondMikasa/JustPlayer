@@ -1,0 +1,414 @@
+From de35be07d678170a2050d6ea06792b7202beedd7 Mon Sep 17 00:00:00 2001
+From: Claude <claude@anthropic.com>
+Date: Mon, 17 Aug 2026 20:47:20 +0000
+Subject: [PATCH] Music library: permissions, DB migration, artist/album
+ scanning, repository queries, prefs toggle
+
+---
+ app/src/main/AndroidManifest.xml              |  1 +
+ .../xyz/mpv/rex/database/MpvExDatabase.kt     |  2 +-
+ .../mpv/rex/database/dao/HybridMediaDao.kt    | 13 +++
+ .../database/entities/HybridMediaEntity.kt    |  5 ++
+ .../repository/HybridMediaIndexRepository.kt  | 80 +++++++++++++++++++
+ .../kotlin/xyz/mpv/rex/di/DatabaseModule.kt   | 12 ++-
+ .../mpv/rex/domain/media/model/MusicModels.kt | 48 +++++++++++
+ .../xyz/mpv/rex/domain/media/model/Video.kt   |  3 +
+ .../mpv/rex/preferences/BrowserPreferences.kt |  1 +
+ .../rex/utils/permission/PermissionUtils.kt   | 57 +++++++++++++
+ 10 files changed, 220 insertions(+), 2 deletions(-)
+ create mode 100644 app/src/main/kotlin/xyz/mpv/rex/domain/media/model/MusicModels.kt
+
+diff --git a/app/src/main/AndroidManifest.xml b/app/src/main/AndroidManifest.xml
+index 77862b7..6dfd0b0 100644
+--- a/app/src/main/AndroidManifest.xml
++++ b/app/src/main/AndroidManifest.xml
+@@ -7,6 +7,7 @@
+         android:name="android.permission.READ_EXTERNAL_STORAGE"
+         android:maxSdkVersion="32" />
+     <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
++    <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" />
+     <uses-permission
+         android:name="android.permission.WRITE_EXTERNAL_STORAGE"
+         android:maxSdkVersion="28"
+diff --git a/app/src/main/kotlin/xyz/mpv/rex/database/MpvExDatabase.kt b/app/src/main/kotlin/xyz/mpv/rex/database/MpvExDatabase.kt
+index 937a831..92a423a 100644
+--- a/app/src/main/kotlin/xyz/mpv/rex/database/MpvExDatabase.kt
++++ b/app/src/main/kotlin/xyz/mpv/rex/database/MpvExDatabase.kt
+@@ -33,7 +33,7 @@ import xyz.mpv.rex.domain.network.NetworkConnection
+     HybridMediaEntity::class,
+     HybridMediaRootEntity::class,
+   ],
+-  version = 15,
++  version = 16,
+   exportSchema = true,
+ )
+ @TypeConverters(NetworkProtocolConverter::class)
+diff --git a/app/src/main/kotlin/xyz/mpv/rex/database/dao/HybridMediaDao.kt b/app/src/main/kotlin/xyz/mpv/rex/database/dao/HybridMediaDao.kt
+index 42b99a9..3ea344e 100644
+--- a/app/src/main/kotlin/xyz/mpv/rex/database/dao/HybridMediaDao.kt
++++ b/app/src/main/kotlin/xyz/mpv/rex/database/dao/HybridMediaDao.kt
+@@ -83,6 +83,8 @@ interface HybridMediaDao {
+         width = :width,
+         height = :height,
+         rotation = :rotation,
++        artist = :artist,
++        album = :album,
+         metadataState = :metadataState
+     WHERE identity = :identity
+     """,
+@@ -94,8 +96,19 @@ interface HybridMediaDao {
+     height: Int,
+     rotation: Int,
+     metadataState: String,
++    artist: String = "",
++    album: String = "",
+   )
+ 
++  @Query(
++    """
++    SELECT * FROM hybrid_media_index
++    WHERE isAudio = 1 AND available = 1
++    ORDER BY displayName COLLATE NOCASE
++    """,
++  )
++  suspend fun getAllAudio(): List<HybridMediaEntity>
++
+   @Query("DELETE FROM hybrid_media_index")
+   suspend fun clearMedia()
+ 
+diff --git a/app/src/main/kotlin/xyz/mpv/rex/database/entities/HybridMediaEntity.kt b/app/src/main/kotlin/xyz/mpv/rex/database/entities/HybridMediaEntity.kt
+index a91c425..e0381ea 100644
+--- a/app/src/main/kotlin/xyz/mpv/rex/database/entities/HybridMediaEntity.kt
++++ b/app/src/main/kotlin/xyz/mpv/rex/database/entities/HybridMediaEntity.kt
+@@ -32,6 +32,11 @@ data class HybridMediaEntity(
+   val metadataState: String = "PENDING",
+   val available: Boolean = true,
+   val lastSeenGeneration: Long,
++  val artist: String = "",
++  val album: String = "",
++  val albumId: Long = 0L,
++  val trackNumber: Int = 0,
++  val year: Int = 0,
+ )
+ 
+ @Entity(tableName = "hybrid_media_roots")
+diff --git a/app/src/main/kotlin/xyz/mpv/rex/database/repository/HybridMediaIndexRepository.kt b/app/src/main/kotlin/xyz/mpv/rex/database/repository/HybridMediaIndexRepository.kt
+index 180926c..929a3f4 100644
+--- a/app/src/main/kotlin/xyz/mpv/rex/database/repository/HybridMediaIndexRepository.kt
++++ b/app/src/main/kotlin/xyz/mpv/rex/database/repository/HybridMediaIndexRepository.kt
+@@ -16,6 +16,8 @@ import xyz.mpv.rex.database.entities.HybridMediaEntity
+ import xyz.mpv.rex.database.entities.HybridMediaRootEntity
+ import xyz.mpv.rex.database.entities.PlaybackStateEntity
+ import xyz.mpv.rex.domain.media.model.MediaFolder
++import xyz.mpv.rex.domain.media.model.MusicAlbum
++import xyz.mpv.rex.domain.media.model.MusicArtist
+ import xyz.mpv.rex.domain.media.model.Video
+ import xyz.mpv.rex.preferences.BrowserPreferences
+ import xyz.mpv.rex.preferences.FoldersPreferences
+@@ -296,6 +298,8 @@ class HybridMediaIndexRepository(
+                 height = metadata.height,
+                 rotation = metadata.rotation,
+                 metadataState = "INDEXED",
++                artist = if (item.isAudio) metadata.artist else "",
++                album = if (item.isAudio) metadata.album else "",
+               )
+             } else {
+               dao.updateMediaMetadata(
+@@ -390,6 +394,60 @@ class HybridMediaIndexRepository(
+       .toList()
+   }
+ 
++  // ==================== MUSIC LIBRARY ====================
++  // NOTE: albums/artists are grouped in-memory from getAllSongs() for simplicity.
++  // Fine for typical libraries (hundreds-low thousands of tracks); if this becomes
++  // a bottleneck on very large libraries, replace with a proper SQL GROUP BY query
++  // (SELECT album, artist, albumId, COUNT(*) FROM hybrid_media_index WHERE isAudio = 1 ...)
++  // added directly to HybridMediaDao.
++
++  suspend fun getAllSongs(): List<Video> = withContext(Dispatchers.IO) {
++    dao.getAllAudio()
++      .asSequence()
++      .map { it.toVideo() }
++      .sortedBy { it.title.lowercase() }
++      .toList()
++  }
++
++  suspend fun getAlbums(): List<MusicAlbum> = withContext(Dispatchers.IO) {
++    getAllSongs()
++      .groupBy { it.albumId.takeIf { id -> id != 0L } ?: (it.album to it.artist).hashCode().toLong() }
++      .map { (albumKey, songs) ->
++        val sample = songs.first()
++        MusicAlbum(
++          id = albumKey,
++          title = sample.album.ifBlank { "Unknown Album" },
++          artist = sample.artist.ifBlank { "Unknown Artist" },
++          songCount = songs.size,
++          year = songs.maxOf { it.year },
++        )
++      }
++      .sortedBy { it.title.lowercase() }
++  }
++
++  suspend fun getArtists(): List<MusicArtist> = withContext(Dispatchers.IO) {
++    getAllSongs()
++      .groupBy { it.artist.ifBlank { "Unknown Artist" } }
++      .map { (artist, songs) ->
++        MusicArtist(
++          name = artist,
++          songCount = songs.size,
++          albumCount = songs.map { it.albumId.takeIf { id -> id != 0L } ?: (it.album to it.artist).hashCode().toLong() }.distinct().size,
++        )
++      }
++      .sortedBy { it.name.lowercase() }
++  }
++
++  suspend fun getSongsForAlbum(albumId: Long): List<Video> = withContext(Dispatchers.IO) {
++    getAllSongs()
++      .filter { (it.albumId.takeIf { id -> id != 0L } ?: (it.album to it.artist).hashCode().toLong()) == albumId }
++      .sortedWith(compareBy({ it.trackNumber.takeIf { n -> n != 0 } ?: Int.MAX_VALUE }, { it.title.lowercase() }))
++  }
++
++  suspend fun getSongsForArtist(artist: String): List<Video> = withContext(Dispatchers.IO) {
++    getAllSongs().filter { it.artist.ifBlank { "Unknown Artist" } == artist }
++  }
++
+   suspend fun clear() {
+     dao.clearMedia()
+     dao.clearRoots()
+@@ -644,6 +702,12 @@ class HybridMediaIndexRepository(
+         if (!isAudio) {
+           add(MediaStore.MediaColumns.WIDTH)
+           add(MediaStore.MediaColumns.HEIGHT)
++        } else {
++          add(MediaStore.Audio.Media.ARTIST)
++          add(MediaStore.Audio.Media.ALBUM)
++          add(MediaStore.Audio.Media.ALBUM_ID)
++          add(MediaStore.Audio.Media.TRACK)
++          add(MediaStore.Audio.Media.YEAR)
+         }
+       }.toTypedArray()
+       context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
+@@ -656,6 +720,11 @@ class HybridMediaIndexRepository(
+         val durationColumn = cursor.getColumnIndex(MediaStore.MediaColumns.DURATION)
+         val widthColumn = cursor.getColumnIndex(MediaStore.MediaColumns.WIDTH)
+         val heightColumn = cursor.getColumnIndex(MediaStore.MediaColumns.HEIGHT)
++        val artistColumn = if (isAudio) cursor.getColumnIndex(MediaStore.Audio.Media.ARTIST) else -1
++        val albumColumn = if (isAudio) cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM) else -1
++        val albumIdColumn = if (isAudio) cursor.getColumnIndex(MediaStore.Audio.Media.ALBUM_ID) else -1
++        val trackColumn = if (isAudio) cursor.getColumnIndex(MediaStore.Audio.Media.TRACK) else -1
++        val yearColumn = if (isAudio) cursor.getColumnIndex(MediaStore.Audio.Media.YEAR) else -1
+ 
+         while (cursor.moveToNext()) {
+           currentCoroutineContext().ensureActive()
+@@ -692,6 +761,12 @@ class HybridMediaIndexRepository(
+             metadataState = "INDEXED",
+             available = true,
+             lastSeenGeneration = generation,
++            artist = if (artistColumn >= 0) cursor.getString(artistColumn) ?: "" else "",
++            album = if (albumColumn >= 0) cursor.getString(albumColumn) ?: "" else "",
++            albumId = if (albumIdColumn >= 0) cursor.getLong(albumIdColumn) else 0L,
++            // MediaStore.Audio.Media.TRACK is sometimes encoded as (disc * 1000) + track; take the low 3 digits.
++            trackNumber = if (trackColumn >= 0) cursor.getInt(trackColumn) % 1000 else 0,
++            year = if (yearColumn >= 0) cursor.getInt(yearColumn) else 0,
+           )
+           count++
+           if (batch.size >= BATCH_SIZE) {
+@@ -823,6 +898,11 @@ class HybridMediaIndexRepository(
+       fps = 0f,
+       resolution = if (isAudio) "" else MediaFormatter.formatResolution(width, height),
+       isAudio = isAudio,
++      artist = artist,
++      album = album,
++      albumId = albumId,
++      trackNumber = trackNumber,
++      year = year,
+     )
+   }
+ 
+diff --git a/app/src/main/kotlin/xyz/mpv/rex/di/DatabaseModule.kt b/app/src/main/kotlin/xyz/mpv/rex/di/DatabaseModule.kt
+index b2f108c..988db50 100644
+--- a/app/src/main/kotlin/xyz/mpv/rex/di/DatabaseModule.kt
++++ b/app/src/main/kotlin/xyz/mpv/rex/di/DatabaseModule.kt
+@@ -547,6 +547,16 @@ val MIGRATION_14_15 = object : Migration(14, 15) {
+   }
+ }
+ 
++val MIGRATION_15_16 = object : Migration(15, 16) {
++  override fun migrate(db: SupportSQLiteDatabase) {
++    db.execSQL("ALTER TABLE hybrid_media_index ADD COLUMN artist TEXT NOT NULL DEFAULT ''")
++    db.execSQL("ALTER TABLE hybrid_media_index ADD COLUMN album TEXT NOT NULL DEFAULT ''")
++    db.execSQL("ALTER TABLE hybrid_media_index ADD COLUMN albumId INTEGER NOT NULL DEFAULT 0")
++    db.execSQL("ALTER TABLE hybrid_media_index ADD COLUMN trackNumber INTEGER NOT NULL DEFAULT 0")
++    db.execSQL("ALTER TABLE hybrid_media_index ADD COLUMN year INTEGER NOT NULL DEFAULT 0")
++  }
++}
++
+ val DatabaseModule =
+   module {
+     single<Json> {
+@@ -561,7 +571,7 @@ val DatabaseModule =
+       Room
+         .databaseBuilder(context, MpvExDatabase::class.java, "mpvex.db")
+         .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+-        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15)
++        .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16)
+         .fallbackToDestructiveMigration(false) // This is now safe
+         .build()
+     }
+diff --git a/app/src/main/kotlin/xyz/mpv/rex/domain/media/model/MusicModels.kt b/app/src/main/kotlin/xyz/mpv/rex/domain/media/model/MusicModels.kt
+new file mode 100644
+index 0000000..b7ad99a
+--- /dev/null
++++ b/app/src/main/kotlin/xyz/mpv/rex/domain/media/model/MusicModels.kt
+@@ -0,0 +1,48 @@
++package xyz.mpv.rex.domain.media.model
++
++import androidx.compose.runtime.Immutable
++
++/**
++ * Top-level tabs within the Music library screen.
++ * Songs/Albums/Artists are derived from [Video] items where isAudio == true;
++ * Playlists reuses the existing playlist feature (playlists aren't video-specific).
++ */
++@Immutable
++enum class MusicTab(val title: String) {
++  SONGS("Songs"),
++  ALBUMS("Albums"),
++  ARTISTS("Artists"),
++  PLAYLISTS("Playlists"),
++}
++
++@Immutable
++data class MusicAlbum(
++  val id: Long,
++  val title: String,
++  val artist: String,
++  val songCount: Int,
++  val year: Int = 0,
++)
++
++@Immutable
++data class MusicArtist(
++  val name: String,
++  val songCount: Int,
++  val albumCount: Int,
++)
++
++@Immutable
++enum class MusicSortField(val displayName: String) {
++  TITLE("Title"),
++  ARTIST("Artist"),
++  ALBUM("Album"),
++  DURATION("Duration"),
++  DATE_ADDED("Date Added"),
++  YEAR("Year"),
++}
++
++@Immutable
++enum class MusicSortOrder {
++  ASCENDING,
++  DESCENDING,
++}
+diff --git a/app/src/main/kotlin/xyz/mpv/rex/domain/media/model/Video.kt b/app/src/main/kotlin/xyz/mpv/rex/domain/media/model/Video.kt
+index cc4f89f..6e268e1 100644
+--- a/app/src/main/kotlin/xyz/mpv/rex/domain/media/model/Video.kt
++++ b/app/src/main/kotlin/xyz/mpv/rex/domain/media/model/Video.kt
+@@ -29,5 +29,8 @@ data class Video(
+   val isAudio: Boolean = false,
+   val artist: String = "",
+   val album: String = "",
++  val albumId: Long = 0L,
++  val trackNumber: Int = 0,
++  val year: Int = 0,
+   val savedOrientation: Int? = null,
+ )
+diff --git a/app/src/main/kotlin/xyz/mpv/rex/preferences/BrowserPreferences.kt b/app/src/main/kotlin/xyz/mpv/rex/preferences/BrowserPreferences.kt
+index a9438a9..d868528 100644
+--- a/app/src/main/kotlin/xyz/mpv/rex/preferences/BrowserPreferences.kt
++++ b/app/src/main/kotlin/xyz/mpv/rex/preferences/BrowserPreferences.kt
+@@ -69,6 +69,7 @@ class BrowserPreferences(
+   val enableTabRecents = preferenceStore.getBoolean("enable_tab_recents", true)
+   val enableTabPlaylists = preferenceStore.getBoolean("enable_tab_playlists", true)
+   val enableTabNetwork = preferenceStore.getBoolean("enable_tab_network", true)
++  val enableTabMusic = preferenceStore.getBoolean("enable_tab_music", true)
+   val playedNetworkLinks = preferenceStore.getString("played_network_links", "")
+ }
+ 
+diff --git a/app/src/main/kotlin/xyz/mpv/rex/utils/permission/PermissionUtils.kt b/app/src/main/kotlin/xyz/mpv/rex/utils/permission/PermissionUtils.kt
+index 57f0f9b..220abf1 100644
+--- a/app/src/main/kotlin/xyz/mpv/rex/utils/permission/PermissionUtils.kt
++++ b/app/src/main/kotlin/xyz/mpv/rex/utils/permission/PermissionUtils.kt
+@@ -134,6 +134,18 @@ object PermissionUtils {
+       else -> android.Manifest.permission.READ_EXTERNAL_STORAGE
+     }
+ 
++  /**
++   * Returns the set of permissions needed for full media library access (video + audio).
++   * On Android 13+, video and audio are separate runtime permissions; below that, the
++   * single storage permission from [getStoragePermission] already covers both.
++   */
++  fun getMediaLibraryPermissions(): List<String> =
++    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
++      listOf(android.Manifest.permission.READ_MEDIA_VIDEO, android.Manifest.permission.READ_MEDIA_AUDIO)
++    } else {
++      listOf(getStoragePermission())
++    }
++
+   /**
+    * Creates a permission state for storage access.
+    */
+@@ -141,6 +153,51 @@ object PermissionUtils {
+   @Composable
+   fun rememberStoragePermissionState(): PermissionState = rememberPermissionState(getStoragePermission())
+ 
++  /**
++   * Handles combined video+audio media permissions (e.g. for the Music library screen)
++   * and invokes [onPermissionGranted] once all required permissions are granted.
++   * Mirrors [handleStoragePermission]'s MANAGE_EXTERNAL_STORAGE fallback on Android 11+.
++   */
++  @OptIn(ExperimentalPermissionsApi::class)
++  @Composable
++  fun handleMediaLibraryPermissions(
++    onPermissionGranted: () -> Unit,
++  ): com.google.accompanist.permissions.MultiplePermissionsState {
++    val permissionsState = com.google.accompanist.permissions.rememberMultiplePermissionsState(
++      permissions = getMediaLibraryPermissions()
++    )
++    val context = LocalContext.current
++    var lifecycleTrigger by remember { mutableIntStateOf(0) }
++
++    DisposableEffect(Unit) {
++      val lifecycleOwner = context as? LifecycleOwner
++      val observer =
++        LifecycleEventObserver { _, event ->
++          if (event == Lifecycle.Event.ON_RESUME) {
++            lifecycleTrigger++
++          }
++        }
++      lifecycleOwner?.lifecycle?.addObserver(observer)
++      onDispose {
++        lifecycleOwner?.lifecycle?.removeObserver(observer)
++      }
++    }
++
++    val hasManageStorage = remember(lifecycleTrigger) {
++      !BuildConfig.SCOPED_STORAGE_ONLY &&
++        Build.VERSION.SDK_INT >= Build.VERSION_CODES.R &&
++        android.os.Environment.isExternalStorageManager()
++    }
++
++    LaunchedEffect(permissionsState.allPermissionsGranted, hasManageStorage) {
++      if (hasManageStorage || permissionsState.allPermissionsGranted) {
++        onPermissionGranted()
++      }
++    }
++
++    return permissionsState
++  }
++
+   /**
+    * Handles storage permission and invokes [onPermissionGranted] when granted.
+    * On Android 11+, also checks MANAGE_EXTERNAL_STORAGE permission.
+-- 
+2.43.0
+
