@@ -69,39 +69,44 @@ class MiniPlayerStateManager : KoinComponent {
 
   fun updateState(
     isPlaybackActive: Boolean = _state.value.isPlaybackActive,
-    title: String = _state.value.title,
-    artist: String = _state.value.artist,
+    title: String? = null,
+    artist: String? = null,
     currentPositionMs: Long = _state.value.currentPositionMs,
     durationMs: Long = _state.value.durationMs,
     isPaused: Boolean = _state.value.isPaused,
-    thumbnail: Bitmap? = _state.value.thumbnail,
-    videoPath: String? = _state.value.videoPath,
+    thumbnail: Bitmap? = null,
+    videoPath: String? = null,
     hasNext: Boolean = _state.value.hasNext,
     hasPrevious: Boolean = _state.value.hasPrevious,
     nextTitle: String? = _state.value.nextTitle,
     prevTitle: String? = _state.value.prevTitle,
-    nextThumbnail: Bitmap? = _state.value.nextThumbnail,
-    prevThumbnail: Bitmap? = _state.value.prevThumbnail,
+    nextThumbnail: Bitmap? = null,
+    prevThumbnail: Bitmap? = null,
     isExpanded: Boolean = _state.value.isExpanded,
     shuffleEnabled: Boolean = _state.value.shuffleEnabled,
     repeatMode: RepeatMode = _state.value.repeatMode,
+    resetThumbnails: Boolean = false,
   ) {
-    _state.update {
-      it.copy(
+    _state.update { current ->
+      val effectiveVideoPath = videoPath ?: current.videoPath
+      val trackChanged = videoPath != null && videoPath != current.videoPath
+      val effectiveReset = resetThumbnails || trackChanged
+
+      current.copy(
         isPlaybackActive = isPlaybackActive,
-        title = title,
-        artist = artist,
+        title = if (trackChanged) (title ?: "") else (if (title.isNullOrBlank()) current.title else title),
+        artist = if (trackChanged) (artist ?: "") else (if (artist.isNullOrBlank()) current.artist else artist),
         currentPositionMs = currentPositionMs,
         durationMs = durationMs,
         isPaused = isPaused,
-        thumbnail = thumbnail,
-        videoPath = videoPath,
+        thumbnail = if (effectiveReset) thumbnail else (thumbnail ?: current.thumbnail),
+        videoPath = effectiveVideoPath,
         hasNext = hasNext,
         hasPrevious = hasPrevious,
         nextTitle = nextTitle,
         prevTitle = prevTitle,
-        nextThumbnail = nextThumbnail,
-        prevThumbnail = prevThumbnail,
+        nextThumbnail = if (effectiveReset) nextThumbnail else (nextThumbnail ?: current.nextThumbnail),
+        prevThumbnail = if (effectiveReset) prevThumbnail else (prevThumbnail ?: current.prevThumbnail),
         isExpanded = isExpanded,
         shuffleEnabled = shuffleEnabled,
         repeatMode = repeatMode,

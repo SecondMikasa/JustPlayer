@@ -2,6 +2,7 @@ package xyz.mpv.rex.ui.player
 
 import android.content.Context
 import android.content.pm.ActivityInfo
+import android.graphics.Bitmap
 import android.media.AudioManager
 import android.net.Uri
 import android.provider.OpenableColumns
@@ -21,8 +22,6 @@ import xyz.mpv.rex.preferences.DecoderPreferences
 import xyz.mpv.rex.preferences.GesturePreferences
 import xyz.mpv.rex.preferences.PlayerPreferences
 import xyz.mpv.rex.preferences.SubtitlesPreferences
-import xyz.mpv.rex.repository.wyzie.WyzieSearchRepository
-import xyz.mpv.rex.repository.wyzie.WyzieSubtitle
 import xyz.mpv.rex.utils.media.ChecksumUtils
 import xyz.mpv.rex.utils.media.MediaInfoParser
 import `is`.xyz.mpv.MPVLib
@@ -96,7 +95,6 @@ class PlayerViewModel(
   private val json: Json by inject()
   private val playbackStateRepository: xyz.mpv.rex.domain.playbackstate.repository.PlaybackStateRepository by inject()
   private val recentlyPlayedRepository: xyz.mpv.rex.domain.recentlyplayed.repository.RecentlyPlayedRepository by inject()
-  private val wyzieRepository: WyzieSearchRepository by inject()
 
   private val browserPreferences: xyz.mpv.rex.preferences.BrowserPreferences by inject()
   private val miniPlayerStateManager: MiniPlayerStateManager by inject()
@@ -116,7 +114,6 @@ class PlayerViewModel(
    */
   private val _subtitleManager = SubtitleManager(
     context = appContext,
-    wyzieRepository = wyzieRepository,
     scope = viewModelScope,
     onShowToast = { showToast(it) }
   )
@@ -152,23 +149,13 @@ class PlayerViewModel(
   private val _playbackManager: PlaybackManager by inject()
   val playbackManager: PlaybackManager get() = _playbackManager
 
-  // Subtitle state delegates
-  val isDownloadingSub = _subtitleManager.isDownloadingSub
-  val isSearchingSub = _subtitleManager.isSearchingSub
-  val isOnlineSectionExpanded = _subtitleManager.isOnlineSectionExpanded
-  val wyzieSearchResults = _subtitleManager.wyzieSearchResults
-  val mediaSearchResults = _subtitleManager.mediaSearchResults
-  val isSearchingMedia = _subtitleManager.isSearchingMedia
-  val selectedTvShow = _subtitleManager.selectedTvShow
-  val isFetchingTvDetails = _subtitleManager.isFetchingTvDetails
-  val selectedSeason = _subtitleManager.selectedSeason
-  val seasonEpisodes = _subtitleManager.seasonEpisodes
-  val isFetchingEpisodes = _subtitleManager.isFetchingEpisodes
-  val selectedEpisode = _subtitleManager.selectedEpisode
-
   // Playlist items for the playlist sheet
   private val _playlistItems = kotlinx.coroutines.flow.MutableStateFlow<List<xyz.mpv.rex.ui.player.controls.components.sheets.PlaylistItem>>(emptyList())
   val playlistItems: kotlinx.coroutines.flow.StateFlow<List<xyz.mpv.rex.ui.player.controls.components.sheets.PlaylistItem>> = _playlistItems.asStateFlow()
+
+  val currentThumbnail: StateFlow<Bitmap?> = miniPlayerStateManager.state
+    .map { it.thumbnail }
+    .stateIn(viewModelScope, SharingStarted.Eagerly, miniPlayerStateManager.state.value.thumbnail)
 
   // Whether the currently loaded media is audio-only (no video track). Set once per
   // file load from PlayerActivity.handleFileLoaded(), which already computes this via
@@ -177,11 +164,12 @@ class PlayerViewModel(
   private val _isAudioMedia = MutableStateFlow(false)
   val isAudioMedia: StateFlow<Boolean> = _isAudioMedia.asStateFlow()
 
+  private val _isLoading = MutableStateFlow(true)
+  val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
+
   fun setIsAudioMedia(isAudio: Boolean) {
     _isAudioMedia.value = isAudio
   }
-
-  fun toggleOnlineSection() = _subtitleManager.toggleOnlineSection()
 
   // Cache for video metadata to avoid re-extracting — LruCache handles bounds + thread-safety
   private val metadataCache = object : android.util.LruCache<String, Pair<String, String>>(100) {}
@@ -738,6 +726,7 @@ class PlayerViewModel(
   }
 
   fun prepareForFileLoad(initialDurationSec: Float? = null) {
+    _isLoading.value = true
     resetExternalAudioTracks()
     _precisePosition.value = 0f
     if (initialDurationSec != null && initialDurationSec > 0f) {
@@ -750,6 +739,7 @@ class PlayerViewModel(
   }
 
   fun onFileStartLoading() {
+    _isLoading.value = true
     if (_externalAudioTracks.isEmpty()) {
       _precisePosition.value = 0f
       if (_primaryVideoDuration.value == null) {
@@ -759,10 +749,28 @@ class PlayerViewModel(
   }
 
   fun onFileLoaded(durationSec: Double) {
+    clearLoadingState(immediate = false, unpauseAfter = true)
     if (durationSec > 0) {
       if (_externalAudioTracks.isEmpty()) {
         _primaryVideoDuration.value = durationSec
         _preciseDuration.value = durationSec.toFloat()
+      }
+    }
+  }
+
+  fun clearLoadingState(immediate: Boolean = false, unpauseAfter: Boolean = false) {
+    if (immediate) {
+      _isLoading.value = false
+    } else {
+      viewModelScope.launch {
+        // Force a delay to prevent thumbnail flashes and allow UI state to settle.
+        // Use a shorter delay for audio as it's typically faster.
+        val settleDelay = if (isAudioMedia.value) 50L else 800L
+        delay(settleDelay)
+        _isLoading.value = false
+        if (unpauseAfter) {
+          unpause()
+        }
       }
     }
   }
@@ -818,24 +826,6 @@ class PlayerViewModel(
 
 
   fun removeSubtitle(id: Int) = _subtitleManager.removeSubtitle(id, subtitleTracks.value)
-
-  // --- Media Search and Series Management ---
-
-  fun searchMedia(query: String) = _subtitleManager.searchMedia(query)
-
-  fun selectMedia(result: xyz.mpv.rex.repository.wyzie.WyzieTmdbResult) = _subtitleManager.selectMedia(result)
-
-  fun selectSeason(season: xyz.mpv.rex.repository.wyzie.WyzieSeason) = _subtitleManager.selectSeason(season)
-
-  fun selectEpisode(episode: xyz.mpv.rex.repository.wyzie.WyzieEpisode) = _subtitleManager.selectEpisode(episode, currentMediaTitle)
-
-  fun clearMediaSelection() = _subtitleManager.clearMediaSelection()
-
-  // --- Subtitle Search ---
-  fun searchSubtitles(query: String, season: Int? = null, episode: Int? = null, year: String? = null) = _subtitleManager.searchSubtitles(query, season, episode, year)
-
-  fun downloadSubtitle(subtitle: WyzieSubtitle) = _subtitleManager.downloadSubtitle(subtitle, currentMediaTitle)
-
 
   fun toggleSubtitle(id: Int) {
     val primarySid = MPVLib.getPropertyInt("sid") ?: 0
@@ -1777,9 +1767,17 @@ class PlayerViewModel(
 
       // Try to get from cache first (synchronized access)
       val cacheKey = uri.toString()
-      val (durationStr, resolutionStr) = synchronized(metadataCache) { metadataCache[cacheKey] } ?: ("" to "")
+      val managerDurationMs = _playlistManager.getDurationAt(index)
+      val managerDurationStr = if (managerDurationMs > 0) formatDuration(managerDurationMs) else ""
+      val (durationStr, resolutionStr) = synchronized(metadataCache) { metadataCache[cacheKey] } ?: (managerDurationStr to "")
       
       val watchedThreshold = browserPreferences.watchedThreshold.get().toFloat()
+
+      val isAudio = if (uri.scheme == "content") {
+        host.context.contentResolver.getType(uri)?.startsWith("audio/") == true
+      } else {
+        xyz.mpv.rex.utils.storage.FileTypeUtils.isAudioFile(java.io.File(uri.path ?: ""))
+      }
 
       xyz.mpv.rex.ui.player.controls.components.sheets.PlaylistItem(
         uri = uri,
@@ -1791,6 +1789,7 @@ class PlayerViewModel(
         isWatched = isCurrentlyPlaying && currentProgress >= watchedThreshold,
         duration = durationStr,
         resolution = resolutionStr,
+        isAudio = isAudio,
       )
     }
   }

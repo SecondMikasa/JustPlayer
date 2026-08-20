@@ -50,7 +50,7 @@ class MediaPlaybackService :
 
     @Volatile
     internal var thumbnail: Bitmap? = null
-    
+
     @Volatile
     private var isServiceRunning = false
 
@@ -87,6 +87,7 @@ class MediaPlaybackService :
   private var paused = false
   private var lastNotificationUpdateTime = 0L
   private val notificationUpdateIntervalMs = 1000L // Update notification every 1 second
+  private var lastTrackPath: String? = null
 
   /**
    * Receiver for ACTION_AUDIO_BECOMING_NOISY (headphone disconnect).
@@ -297,6 +298,17 @@ class MediaPlaybackService :
 
   private fun updateMediaSession() {
     try {
+      val currentPath = runCatching { MPVLib.getPropertyString("path") }.getOrNull()
+      if (currentPath != null && currentPath != lastTrackPath) {
+        lastTrackPath = currentPath
+        // Track changed in MPV, ensure we pick up the latest title/artist from engine
+        mediaTitle = MPVLib.getPropertyString("media-title") ?: ""
+        mediaArtist = MPVLib.getPropertyString("metadata/artist") ?: ""
+        // If the path changed and we didn't get a new thumbnail yet, reset it
+        // so we don't show the previous song's art.
+        MediaPlaybackService.thumbnail = null
+      }
+
       // Ensure we have valid media title
       val title = mediaTitle.ifBlank { "Unknown Video" }
       
@@ -313,9 +325,12 @@ class MediaPlaybackService :
           .putString(MediaMetadataCompat.METADATA_KEY_DISPLAY_TITLE, title)
           .putLong(MediaMetadataCompat.METADATA_KEY_DURATION, duration)
 
-      thumbnail?.let {
-        metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
-        metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, it)
+      val activeThumb = MediaPlaybackService.thumbnail ?: miniPlayerStateManager.state.value.thumbnail
+      activeThumb?.let {
+        if (!it.isRecycled) {
+          metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_ALBUM_ART, it)
+          metadataBuilder.putBitmap(MediaMetadataCompat.METADATA_KEY_DISPLAY_ICON, it)
+        }
       }
       mediaSession.setMetadata(metadataBuilder.build())
 
@@ -348,7 +363,8 @@ class MediaPlaybackService :
         currentPositionMs = position,
         durationMs = duration,
         isPaused = paused,
-        thumbnail = thumbnail,
+        thumbnail = activeThumb,
+        videoPath = currentPath,
         shuffleEnabled = playerPreferences.shuffleEnabled.get(),
         repeatMode = playerPreferences.repeatMode.get(),
       )
@@ -552,7 +568,8 @@ class MediaPlaybackService :
       }
       
       // Clear thumbnail to prevent memory leak
-      thumbnail = null
+      MediaPlaybackService.thumbnail = null
+      lastTrackPath = null
       
       runCatching {
         MPVLib.command("stop")

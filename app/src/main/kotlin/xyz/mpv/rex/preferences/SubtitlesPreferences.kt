@@ -15,7 +15,6 @@ import xyz.mpv.rex.ui.player.controls.components.panels.SubtitlesBorderStyle
 class SubtitlesPreferences(
   preferenceStore: PreferenceStore,
 ) {
-  val preferredLanguages = preferenceStore.getString("sub_preferred_languages")
   val disableSubtitlesByDefault = preferenceStore.getBoolean("sub_disable_by_default", false)
   val autoloadMatchingSubtitles = preferenceStore.getBoolean("sub_autoload_enabled", true)
 
@@ -46,16 +45,7 @@ class SubtitlesPreferences(
   val pickerPath = preferenceStore.getString("sub_picker_path")
   val customSubtitleFolder = preferenceStore.getString("sub_custom_folder", "")
   val openPickerAtVideoLocation = preferenceStore.getBoolean("sub_open_at_video_location", false)
-  
-  val subdlApiKey = preferenceStore.getString("subdl_api_key", "")
   val subtitleSaveFolder = preferenceStore.getString("sub_save_folder", "")
-  val subdlLanguages = preferenceStore.getStringSet("subdl_languages", setOf("en"))
-  
-  val wyzieSources = preferenceStore.getStringSet("wyzie_sources", setOf("all"))
-  val wyzieFormats = preferenceStore.getStringSet("wyzie_formats", setOf("srt", "ass"))
-  val wyzieEncodings = preferenceStore.getStringSet("wyzie_encodings", setOf("utf-8"))
-  val wyzieHearingImpaired = preferenceStore.getBoolean("wyzie_hi", false)
-  val wyzieApiKey = preferenceStore.getString("wyzie_api_key", "")
 }
 
 enum class SubtitleJustification(

@@ -26,7 +26,6 @@ import xyz.mpv.rex.ui.player.controls.components.sheets.MoreSheet
 import xyz.mpv.rex.ui.player.controls.components.sheets.PlaybackSpeedSheet
 import xyz.mpv.rex.ui.player.controls.components.sheets.PlaylistSheet
 import xyz.mpv.rex.ui.player.controls.components.sheets.SubtitlesSheet
-import xyz.mpv.rex.ui.player.controls.components.sheets.OnlineSubtitleSearchSheet
 import xyz.mpv.rex.ui.player.controls.components.sheets.EqualizerSheet
 import xyz.mpv.rex.utils.media.MediaInfoParser
 import dev.vivvvek.seeker.Segment
@@ -148,66 +147,7 @@ fun PlayerSheets(
         onRemoveSubtitle = onRemoveSubtitle,
         onOpenSubtitleSettings = { onOpenPanel(Panels.SubtitleSettings) },
         onOpenSubtitleDelay = { onOpenPanel(Panels.SubtitleDelay) },
-        onOpenOnlineSearch = { onShowSheet(Sheets.OnlineSubtitleSearch) },
         onDismissRequest = onDismissRequest
-      )
-    }
-
-    Sheets.OnlineSubtitleSearch -> {
-      val isSearching by viewModel.isSearchingSub.composeCollectAsState()
-      val isDownloading by viewModel.isDownloadingSub.composeCollectAsState()
-      val results by viewModel.wyzieSearchResults.composeCollectAsState()
-      val isOnlineSectionExpanded by viewModel.isOnlineSectionExpanded.composeCollectAsState()
-
-      // Media Search / Autocomplete
-      val mediaResults by viewModel.mediaSearchResults.composeCollectAsState()
-      val isSearchingMedia by viewModel.isSearchingMedia.composeCollectAsState()
-      
-      // TV Show / Seasons / Episodes
-      val selectedTvShow by viewModel.selectedTvShow.composeCollectAsState()
-      val isFetchingTvDetails by viewModel.isFetchingTvDetails.composeCollectAsState()
-      val selectedSeason by viewModel.selectedSeason.composeCollectAsState()
-      val seasonEpisodes by viewModel.seasonEpisodes.composeCollectAsState()
-      val isFetchingEpisodes by viewModel.isFetchingEpisodes.composeCollectAsState()
-      val selectedEpisode by viewModel.selectedEpisode.composeCollectAsState()
-
-      OnlineSubtitleSearchSheet(
-        onDismissRequest = onDismissRequest,
-        onDownloadOnline = { viewModel.downloadSubtitle(it) },
-        isSearching = isSearching,
-        isDownloading = isDownloading,
-        searchResults = results.toImmutableList(),
-        isOnlineSectionExpanded = isOnlineSectionExpanded,
-        onToggleOnlineSection = { viewModel.toggleOnlineSection() },
-        mediaTitle = viewModel.currentMediaTitle,
-        // Autocomplete & Series Selection
-        mediaSearchResults = mediaResults.toImmutableList(),
-        isSearchingMedia = isSearchingMedia,
-        onSearchMedia = { query ->
-          // Parse both the user's search query and the original filename
-          val queryInfo = MediaInfoParser.parse(query)
-          val fileInfo = MediaInfoParser.parse(viewModel.currentMediaTitle)
-          
-          // Use clean title from query for TMDB search (strip S01E05 noise)
-          val searchTitle = queryInfo.title.ifBlank { query }
-          viewModel.subtitleManager.searchMedia(searchTitle)
-          
-          // Priority: TMDB selection > query parsed > file parsed
-          val s = selectedSeason?.season_number ?: queryInfo.season ?: fileInfo.season
-          val e = selectedEpisode?.episode_number ?: queryInfo.episode ?: fileInfo.episode
-          val y = queryInfo.year ?: fileInfo.year
-          viewModel.subtitleManager.searchSubtitles(searchTitle, s, e, y)
-        },
-        onSelectMedia = { viewModel.subtitleManager.selectMedia(it) },
-        selectedTvShow = selectedTvShow,
-        isFetchingTvDetails = isFetchingTvDetails,
-        selectedSeason = selectedSeason,
-        onSelectSeason = { viewModel.subtitleManager.selectSeason(it) },
-        seasonEpisodes = seasonEpisodes.toImmutableList(),
-        isFetchingEpisodes = isFetchingEpisodes,
-        selectedEpisode = selectedEpisode,
-        onSelectEpisode = { viewModel.subtitleManager.selectEpisode(it, viewModel.currentMediaTitle) },
-        onClearMediaSelection = { viewModel.subtitleManager.clearMediaSelection() }
       )
     }
 

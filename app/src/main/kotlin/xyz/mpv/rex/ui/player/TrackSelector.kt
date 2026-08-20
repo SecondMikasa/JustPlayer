@@ -1,7 +1,6 @@
 package xyz.mpv.rex.ui.player
 
 import android.util.Log
-import xyz.mpv.rex.preferences.AudioPreferences
 import xyz.mpv.rex.preferences.SubtitlesPreferences
 import `is`.xyz.mpv.MPVLib
 import kotlinx.coroutines.delay
@@ -41,7 +40,6 @@ import kotlinx.coroutines.delay
  */
  
 class TrackSelector(
-  private val audioPreferences: AudioPreferences,
   private val subtitlesPreferences: SubtitlesPreferences,
 ) {
   data class TrackChoice(
@@ -261,10 +259,7 @@ class TrackSelector(
         }
       }
 
-      val preferredLangs = audioPreferences.preferredLanguages.get()
-        .split(",")
-        .map { it.trim().lowercase() }
-        .filter { it.isNotEmpty() }
+      val preferredLangs = emptyList<String>()
 
       val ignoreKeywords = listOf("commentary", "description", "adh", "comment", "extra")
 
@@ -377,10 +372,7 @@ class TrackSelector(
       val isAnimeContext = detectAnimeContext(tracks)
       Log.d(TAG, "Smart Tracks: Context defined by Internal Auto-Detection -> $isAnimeContext")
 
-      var preferredLangs = subtitlesPreferences.preferredLanguages.get()
-        .split(",")
-        .map { it.trim().lowercase() }
-        .filter { it.isNotEmpty() }
+      var preferredLangs = emptyList<String>()
 
       if (preferredLangs.isEmpty()) {
         preferredLangs = (MPVLib.getPropertyString("slang") ?: "")

@@ -187,7 +187,7 @@ object MediaUtils : KoinComponent {
         if (path != null && playerPreferences.playlistMode.get()) {
           val playlistResult = kotlinx.coroutines.runBlocking {
             if (launchSource == "media_library_list") {
-              FolderPlaylistOps.generateMediaLibraryPlaylist(context, path)
+              FolderPlaylistOps.generateMediaLibraryPlaylist(path)
             } else {
               FolderPlaylistOps.generateFolderPlaylist(context, path, launchSource)
             }

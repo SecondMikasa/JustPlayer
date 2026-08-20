@@ -1,6 +1,5 @@
 package xyz.mpv.rex.ui.preferences
 
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -84,38 +83,6 @@ object AudioPreferencesScreen : Screen {
           
           item {
             PreferenceCard {
-          val preferredLanguages by preferences.preferredLanguages.collectAsState()
-          TextFieldPreference(
-            value = preferredLanguages,
-            onValueChange = { preferences.preferredLanguages.set(it) },
-            textToValue = { it },
-            title = { Text(stringResource(R.string.pref_preferred_languages)) },
-            summary = {
-                if (preferredLanguages.isNotBlank()) {
-                  Text(
-                    preferredLanguages,
-                    color = MaterialTheme.colorScheme.outline,
-                  )
-                } else {
-                  Text(
-                    stringResource(R.string.not_set_video_default),
-                    color = MaterialTheme.colorScheme.outline,
-                  )
-                }
-              },
-            textField = { value, onValueChange, _ ->
-              Column {
-                Text(stringResource(R.string.pref_audio_preferred_language))
-                TextField(
-                  value,
-                  onValueChange,
-                  modifier = Modifier.fillMaxWidth(),
-                )
-              }
-            },
-          )
-          
-          PreferenceDivider()
           val audioPitchCorrection by preferences.audioPitchCorrection.collectAsState()
           SwitchPreference(
             value = audioPitchCorrection,

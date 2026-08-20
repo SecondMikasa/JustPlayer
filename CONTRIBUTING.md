@@ -2,7 +2,7 @@ Looking to report an issue/bug or make a feature request? Please refer to the [R
 
 Thanks for your interest in contributing to mpvRex!
 
-This guide outlines our development practices, code guidelines, git workflow, and translation contribution process.
+This guide outlines our development practices, code guidelines, and git workflow.
 
 ---
 
@@ -93,68 +93,3 @@ To keep the repository history clean and manageable, we adhere to the following 
 ### Communication
 
 GitHub Issues and Pull Request discussions are our primary channels for communication. Feel free to open a draft issue to discuss design proposals before writing significant code.
-
----
-
-## Translation Contributions
-
-For translations, we use **[Droidlate](https://github.com/estiaksoyeb/Droidlate)** ([PyPI](https://pypi.org/project/droidlate/)) — a lightweight, local, web-based translation workspace designed specifically for Android `strings.xml` resource files.
-
-### Why Droidlate?
-* **Local Offline Workspace:** Translate and edit local files on your own machine without uploading resources to third-party servers.
-* **Preserving XML Formatting & Comments:** Maintain exact XML styling, comments, structure, and formatting.
-* **Tracking Outdated Translations:** Highlight which target translations need updates when base strings change.
-* **Placeholder Verification & QA:** Validate Java-style placeholders to prevent runtime crashes.
-* **Orphaned String Pruning:** Easily prune strings deleted from the main codebase.
-
----
-
-### Step-by-Step Translation Workflow
-
-#### 1. Install Droidlate
-You can install Droidlate globally via `pipx` (recommended) or standard `pip`:
-
-```bash
-# Using pipx (recommended)
-pipx install droidlate
-
-# Or using normal pip
-pip install droidlate
-```
-
-#### 2. Prepare the Repository
-Ensure you have cloned the latest code for mpvRex:
-```bash
-git clone https://github.com/sfsakhawat999/mpvRex.git
-cd mpvRex
-```
-
-#### 3. Start Droidlate
-Open your terminal in the root of the mpvRex directory and run:
-```bash
-droidlate
-```
-Droidlate will start a local web server and open the interface in your default web browser (usually at `http://127.0.0.1:5000`).
-
-#### 4. Adding a New Language
-If your locale isn't listed on the dashboard:
-1. Create a new directory named `values-<locale>` inside your resource directory (e.g., `app/src/main/res/values-<locale>`) following [Android's locale qualifier format](https://developer.android.com/guide/topics/resources/providing-resources#AlternativeResources).
-2. Place an empty `strings.xml` file inside that directory.
-3. Restart Droidlate — it will detect the new locale, populate it with the base English strings, and allow you to begin translating.
-
-#### 5. Translate in the Browser
-On the dashboard, select your language locale to open the editor.
-* Translate strings, view developer comments, and check for format placeholder warnings.
-* Use keyboard shortcuts for productivity:
-  * `Ctrl + S`: Instantly Save & Next.
-  * `Alt + 1` / `Alt + 2`: Paste auto-translation suggestions (Google Translate or MyMemory).
-
-#### 6. Prune Stale/Orphaned Keys
-If any strings have been deleted from the English file, check the **"Orphaned"** tab in the editor to safely prune them and keep the files clean.
-
-#### 7. Commit the Files & the Metadata Ledger
-Saving changes updates:
-1. The target XML file (e.g., `app/src/main/res/values-<locale>/strings.xml`)
-2. A tracking file inside the `.translation_metadata/` directory (e.g., `.translation_metadata/values-<locale>.json`)
-
-**Important:** You must commit both the updated `strings.xml` and its corresponding `.json` ledger file to Git.

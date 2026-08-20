@@ -198,7 +198,7 @@ class PlayerActivity :
    * Track selector for automatic audio/subtitle selection
    */
   private val trackSelector: TrackSelector by lazy {
-    TrackSelector(audioPreferences, subtitlesPreferences)
+    TrackSelector(subtitlesPreferences)
   }
 
   // ==================== Views ====================
@@ -359,6 +359,11 @@ class PlayerActivity :
     } else {
       setupMPV()
     }
+    val isAudio = isCurrentMediaAudio()
+    if (isAudio) {
+      volumeControlStream = AudioManager.STREAM_MUSIC
+    }
+    viewModel.setIsAudioMedia(isAudio)
     viewModel.onMpvCoreInitialized()
     MediaPlaybackService.createNotificationChannel(this)
     setupAudio()
@@ -482,18 +487,41 @@ class PlayerActivity :
         enableVideoAfterBackground()
         miniPlayerStateManager.clearState()
       }
+      
+      val isAudioNow = isCurrentMediaAudio()
+      if (isAudioNow) {
+        runCatching {
+          MPVLib.setPropertyString("vid", "no")
+          MPVLib.setPropertyString("audio-display", "no")
+        }
+      }
+
       if (isUriM3U(playableUri)) {
         loadM3uPlaylistOrPlayDirectly(playableUri)
       } else {
-        if (playerPreferences.savePositionOnQuit.get()) {
-          runCatching { MPVLib.setPropertyBoolean("pause", true) }
-        }
+        runCatching { MPVLib.setPropertyBoolean("pause", true) }
         player.playFile(playableUri)
+      }
+      
+      // Eager extraction for intent media
+      lifecycleScope.launch(Dispatchers.IO) {
+        val u = extractUriFromIntent(intent)
+        if (u != null) {
+          val thumb = extractThumbnailOrCoverArt(u)
+          withContext(Dispatchers.Main) {
+            MediaPlaybackService.thumbnail = thumb
+            miniPlayerStateManager.updateState(thumbnail = thumb)
+          }
+        }
       }
     } else if (isAlreadyPlayingCurrent) {
       Log.d(TAG, "MPV is already playing media: $currentMpvPath. Re-attaching to active session.")
       isReady = true
       enableVideoAfterBackground()
+      viewModel.clearLoadingState(immediate = false) // Re-attaching: show a short loading screen to settle
+    } else {
+      // Starting idle (no media)
+      viewModel.clearLoadingState(immediate = true)
     }
 
     // Set orientation early if we have metadata in intent or cache (avoids jumpy transition for Video/Smart modes)
@@ -2012,8 +2040,6 @@ class PlayerActivity :
       viewModel.setMediaTitle(fileName)
     }
 
-    viewModel.unpause()
-
     if (playerPreferences.showControlsOnPlay.get()) {
       viewModel.showControls()
     }
@@ -2074,7 +2100,7 @@ class PlayerActivity :
       val cachedPrevThumb = prevUri?.let { getCachedThumbnailForUri(it) }
 
       withContext(Dispatchers.Main) {
-        val activeThumb = cachedCurrentThumb ?: MediaPlaybackService.thumbnail ?: miniPlayerStateManager.state.value.thumbnail
+        val activeThumb = cachedCurrentThumb ?: if (currentUri?.toString() == miniPlayerStateManager.state.value.videoPath) miniPlayerStateManager.state.value.thumbnail else null
         MediaPlaybackService.thumbnail = activeThumb
         mediaPlaybackService?.setMediaInfo(title = currentTitle, artist = artist, thumbnail = activeThumb)
         miniPlayerStateManager.updateState(
@@ -2098,7 +2124,7 @@ class PlayerActivity :
       val fullPrevThumbnail = prevUri?.let { extractThumbnailOrCoverArt(it) }
 
       withContext(Dispatchers.Main) {
-        val finalThumb = fullThumbnail ?: cachedCurrentThumb ?: MediaPlaybackService.thumbnail ?: miniPlayerStateManager.state.value.thumbnail
+        val finalThumb = fullThumbnail ?: cachedCurrentThumb ?: if (currentUri?.toString() == miniPlayerStateManager.state.value.videoPath) miniPlayerStateManager.state.value.thumbnail else null
         MediaPlaybackService.thumbnail = finalThumb
         mediaPlaybackService?.setMediaInfo(title = currentTitle, artist = artist, thumbnail = finalThumb)
         miniPlayerStateManager.updateState(
@@ -2532,6 +2558,16 @@ class PlayerActivity :
     val incomingFileName = getFileName(intent).ifBlank { intent.data?.lastPathSegment ?: "" }
     val incomingMediaIdentifier = if (incomingFileName.isNotBlank()) getMediaIdentifier(intent, incomingFileName) else ""
 
+    val isAudioIncoming = isCurrentMediaAudio()
+    if (isAudioIncoming) {
+      volumeControlStream = AudioManager.STREAM_MUSIC
+      runCatching {
+        MPVLib.setPropertyString("vid", "no")
+        MPVLib.setPropertyString("audio-display", "no")
+      }
+    }
+    viewModel.setIsAudioMedia(isAudioIncoming)
+
     val isSameMedia = isReady && incomingUri != null &&
       ((incomingMediaIdentifier.isNotBlank() && incomingMediaIdentifier == mediaIdentifier) ||
        (incomingFileName.isNotBlank() && incomingFileName == fileName))
@@ -2647,6 +2683,16 @@ class PlayerActivity :
     // Load the new file
     getPlayableUri(intent)?.let { uriStr ->
       val parsedUri = runCatching { Uri.parse(uriStr) }.getOrNull()
+      
+      // Eager extraction for the new file in onNewIntent
+      lifecycleScope.launch(Dispatchers.IO) {
+        val thumb = parsedUri?.let { extractThumbnailOrCoverArt(it) }
+        withContext(Dispatchers.Main) {
+          MediaPlaybackService.thumbnail = thumb
+          miniPlayerStateManager.updateState(thumbnail = thumb)
+        }
+      }
+
       val fastDurationMs = if (parsedUri != null) getFastDurationMsForUri(parsedUri) else 0L
       val fastDurationSec = if (fastDurationMs > 0L) fastDurationMs / 1000f else null
       viewModel.prepareForFileLoad(fastDurationSec)
@@ -2654,9 +2700,7 @@ class PlayerActivity :
       if (parsedUri != null && isUriM3U(parsedUri)) {
         loadM3uPlaylistOrPlayDirectly(uriStr)
       } else {
-        if (playerPreferences.savePositionOnQuit.get()) {
-          runCatching { MPVLib.setPropertyBoolean("pause", true) }
-        }
+        runCatching { MPVLib.setPropertyBoolean("pause", true) }
         // Avoid blocking UI thread while mpv opens network streams (e.g., HLS).
         lifecycleScope.launch(Dispatchers.Default) {
           MPVLib.command("loadfile", uriStr)
@@ -2880,12 +2924,14 @@ class PlayerActivity :
       }
 
       KeyEvent.KEYCODE_VOLUME_UP -> {
+        if (viewModel.isAudioMedia.value) return super.onKeyDown(keyCode, event)
         viewModel.changeVolumeBy(1)
         viewModel.displayVolumeSlider()
         return true
       }
 
       KeyEvent.KEYCODE_VOLUME_DOWN -> {
+        if (viewModel.isAudioMedia.value) return super.onKeyDown(keyCode, event)
         viewModel.changeVolumeBy(-1)
         viewModel.displayVolumeSlider()
         return true
@@ -2938,6 +2984,9 @@ class PlayerActivity :
     keyCode: Int,
     event: KeyEvent?,
   ): Boolean {
+    if ((keyCode == KeyEvent.KEYCODE_VOLUME_UP || keyCode == KeyEvent.KEYCODE_VOLUME_DOWN) && viewModel.isAudioMedia.value) {
+      return super.onKeyUp(keyCode, event)
+    }
     event?.let {
       if (player.onKey(it)) return true
     }
@@ -3251,7 +3300,10 @@ class PlayerActivity :
   private fun hasVideoTrack(): Boolean {
     if (!mpvInitialized || player.isExiting) return false
     val w = runCatching { MPVLib.getPropertyInt("width") ?: MPVLib.getPropertyInt("video-params/w") ?: 0 }.getOrDefault(0)
-    if (w > 0) return true
+    if (w > 0) {
+      val albumart = runCatching { MPVLib.getPropertyBoolean("video-params/albumart") }.getOrNull()
+      if (albumart != true) return true
+    }
 
     val trackCount = runCatching { MPVLib.getPropertyInt("track-list/count") ?: 0 }.getOrDefault(0)
     for (i in 0 until trackCount) {
@@ -3270,18 +3322,23 @@ class PlayerActivity :
   private fun isCurrentMediaAudio(): Boolean {
     val path = parsePathFromIntent(intent)
     if (path != null) {
-      val file = File(path)
-      if (file.exists() && xyz.mpv.rex.utils.storage.FileTypeUtils.isAudioFile(file)) {
+      if (xyz.mpv.rex.utils.storage.FileTypeUtils.isAudioFile(File(path))) {
         return true
+      }
+      if (path.startsWith("content://")) {
+        val mime = contentResolver.getType(Uri.parse(path))
+        if (mime?.startsWith("audio/") == true) return true
       }
     }
     return !hasVideoTrack()
   }
 
   private suspend fun createVideoForUri(uri: Uri): Video = withContext(Dispatchers.IO) {
+    var mimeType: String? = null
     val path = when (uri.scheme) {
       "file" -> uri.path ?: uri.toString()
       "content" -> {
+        mimeType = contentResolver.getType(uri)
         val resolvedPath = runCatching {
           contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) {
@@ -3298,7 +3355,7 @@ class PlayerActivity :
     val file = if (path.startsWith("/")) File(path) else null
     val size = file?.length() ?: 0L
     val dateModified = file?.lastModified() ?: 0L
-    val isAudio = FileTypeUtils.isAudioFile(file ?: File(path))
+    val isAudio = mimeType?.startsWith("audio/") == true || FileTypeUtils.isAudioFile(file ?: File(path))
     val name = extractFileNameFromUri(uri) ?: uri.lastPathSegment ?: "Media"
 
     val cachedMeta = file?.let { metadataCache.getOrExtractMetadata(it, uri, name) }
@@ -3567,6 +3624,15 @@ class PlayerActivity :
     loadPlaylistItemInternal(index)
   }
 
+  private fun isAudioFile(uri: Uri): Boolean {
+    if (uri.scheme == "content") {
+      val mime = contentResolver.getType(uri)
+      if (mime?.startsWith("audio/") == true) return true
+    }
+    val path = uri.path ?: return false
+    return xyz.mpv.rex.utils.storage.FileTypeUtils.isAudioFile(File(path))
+  }
+
   /**
    * Internal method to load a playlist item
    */
@@ -3588,6 +3654,15 @@ class PlayerActivity :
     // Update index in manager
     viewModel.playlistManager.updateIndex(index)
 
+    val isAudioItem = isAudioFile(uri)
+    if (isAudioItem) {
+      runCatching {
+        MPVLib.setPropertyString("vid", "no")
+        MPVLib.setPropertyString("audio-display", "no")
+      }
+    }
+    viewModel.setIsAudioMedia(isAudioItem)
+
     // Extract and set the new file name
     val customTitle = viewModel.playlistManager.getTitleAt(index)
     fileName = if (!customTitle.isNullOrBlank()) customTitle else getFileNameFromUri(uri)
@@ -3603,7 +3678,7 @@ class PlayerActivity :
     lifecycleScope.launch(Dispatchers.IO) {
       val cachedThumb = getCachedThumbnailForUri(targetUri)
       withContext(Dispatchers.Main) {
-        val activeThumb = cachedThumb ?: MediaPlaybackService.thumbnail ?: miniPlayerStateManager.state.value.thumbnail
+        val activeThumb = cachedThumb ?: if (targetUri.toString() == miniPlayerStateManager.state.value.videoPath) miniPlayerStateManager.state.value.thumbnail else null
         MediaPlaybackService.thumbnail = activeThumb
         mediaPlaybackService?.setMediaInfo(
           title = fileName,
@@ -3657,11 +3732,9 @@ class PlayerActivity :
       }
     }
 
+    runCatching { MPVLib.setPropertyBoolean("pause", true) }
     if (mpvInitialized) {
       safeSetPropertyString("vid", "no")
-      runCatching { MPVLib.setPropertyBoolean("pause", true) }
-    } else if (playerPreferences.savePositionOnQuit.get()) {
-      runCatching { MPVLib.setPropertyBoolean("pause", true) }
     }
     // Load the new video
     // Avoid blocking UI thread while mpv opens network streams (e.g., HLS).
@@ -3849,11 +3922,9 @@ class PlayerActivity :
         } else {
           // If parsing failed or HLS, play the URI directly in MPV
           Log.d(TAG, "M3U parsing failed or HLS stream. Playing directly: $uriStr")
+          runCatching { MPVLib.setPropertyBoolean("pause", true) }
           if (mpvInitialized) {
             safeSetPropertyString("vid", "no")
-            runCatching { MPVLib.setPropertyBoolean("pause", true) }
-          } else if (playerPreferences.savePositionOnQuit.get()) {
-            runCatching { MPVLib.setPropertyBoolean("pause", true) }
           }
           if (mpvInitialized) {
             lifecycleScope.launch(Dispatchers.Default) {
@@ -3932,7 +4003,7 @@ class PlayerActivity :
   private fun generatePlaylistFromMediaLibrary(currentPath: String) {
     lifecycleScope.launch(Dispatchers.IO) {
       runCatching {
-        val result = FolderPlaylistOps.generateMediaLibraryPlaylist(this@PlayerActivity, currentPath)
+        val result = FolderPlaylistOps.generateMediaLibraryPlaylist(currentPath)
         if (result != null) {
           val (newPlaylist, newIndex) = result
           val durations = newPlaylist.map { getFastDurationMsForUri(it) }

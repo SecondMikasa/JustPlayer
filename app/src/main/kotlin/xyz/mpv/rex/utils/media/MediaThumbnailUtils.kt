@@ -33,7 +33,7 @@ object MediaThumbnailUtils : KoinComponent {
 
       // 1. Primary: Use ThumbnailRepository
       val repoThumbnail = thumbnailRepository.getThumbnail(video, 256, 256)
-      if (repoThumbnail != null && !repoThumbnail.isRecycled && !isMostlySolidThumbnail(repoThumbnail)) {
+      if (repoThumbnail != null && !repoThumbnail.isRecycled && (video.isAudio || !isMostlySolidThumbnail(repoThumbnail))) {
         return@withContext repoThumbnail
       }
 
@@ -65,9 +65,11 @@ object MediaThumbnailUtils : KoinComponent {
   }
 
   suspend fun createVideoForUri(context: Context, uri: Uri): Video = withContext(Dispatchers.IO) {
+    var mimeType: String? = null
     val path = when (uri.scheme) {
       "file" -> uri.path ?: uri.toString()
       "content" -> {
+        mimeType = context.contentResolver.getType(uri)
         val resolvedPath = runCatching {
           context.contentResolver.query(uri, arrayOf(android.provider.MediaStore.MediaColumns.DATA), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) {
@@ -84,20 +86,41 @@ object MediaThumbnailUtils : KoinComponent {
     val file = if (path.startsWith("/")) File(path) else null
     val size = file?.length() ?: 0L
     val dateModified = file?.lastModified() ?: 0L
-    val isAudio = FileTypeUtils.isAudioFile(file ?: File(path))
+    val isAudio = mimeType?.startsWith("audio/") == true || FileTypeUtils.isAudioFile(file ?: File(path))
     val name = if (uri.scheme == "file") File(path).name else (uri.lastPathSegment ?: "Media")
+    val title = if (name.contains('.')) name.substringBeforeLast('.') else name
     val parentFolder = file?.parentFile
 
+    var duration = 0L
+    val retriever = MediaMetadataRetriever()
+    try {
+      if (uri.scheme == "file") {
+        if (file?.exists() == true) retriever.setDataSource(file.absolutePath)
+      } else {
+        retriever.setDataSource(context, uri)
+      }
+      duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+    } catch (_: Exception) {
+    } finally {
+      runCatching { retriever.release() }
+    }
+
+    val identity = when {
+      uri.scheme == "content" -> "content:$path"
+      path.startsWith("/") -> "file:$path"
+      else -> path
+    }
+
     Video(
-      id = path.hashCode().toLong(),
-      title = name,
+      id = identity.hashCode().toLong(),
+      title = title,
       displayName = name,
       path = path,
       uri = uri,
-      duration = 0L,
-      durationFormatted = "",
+      duration = duration,
+      durationFormatted = MediaFormatter.formatDuration(duration),
       size = size,
-      sizeFormatted = "",
+      sizeFormatted = MediaFormatter.formatFileSize(size),
       dateModified = dateModified,
       dateAdded = 0L,
       mimeType = if (isAudio) "audio/*" else "video/*",

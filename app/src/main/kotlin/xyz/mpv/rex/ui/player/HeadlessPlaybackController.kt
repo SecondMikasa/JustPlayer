@@ -364,8 +364,8 @@ class HeadlessPlaybackController(private val appContext: Context) : KoinComponen
       val nextThumb = nextUri?.let { MediaThumbnailUtils.extractThumbnailOrCoverArt(appContext, it) }
       val prevThumb = prevUri?.let { MediaThumbnailUtils.extractThumbnailOrCoverArt(appContext, it) }
 
-      MediaPlaybackService.thumbnail = mainThumb
       withContext(Dispatchers.Main) {
+        MediaPlaybackService.thumbnail = mainThumb
         miniPlayerStateManager.updateState(
           thumbnail = mainThumb,
           nextThumbnail = nextThumb,
@@ -549,7 +549,7 @@ class HeadlessPlaybackController(private val appContext: Context) : KoinComponen
   }
 
   private fun createOffWindowView(): MPVView {
-    val parser = appContext.resources.getLayout(R.layout.shorts_dummy_layout)
+    val parser = appContext.resources.getLayout(R.layout.mpv_dummy_layout)
     var type: Int
     while (parser.next().also { type = it } != XmlPullParser.START_TAG &&
       type != XmlPullParser.END_DOCUMENT

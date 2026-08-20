@@ -345,29 +345,10 @@ object AppearancePreferencesScreen : Screen {
 
                             PreferenceDivider()
 
-                            val enableShorts by browserPreferences.enableShorts.collectAsState()
                             val enableTabRecents by browserPreferences.enableTabRecents.collectAsState()
                             val enableTabPlaylists by browserPreferences.enableTabPlaylists.collectAsState()
                             val enableTabNetwork by browserPreferences.enableTabNetwork.collectAsState()
                             val enableTabMusic by browserPreferences.enableTabMusic.collectAsState()
-
-                            SwitchPreference(
-                                value = enableShorts,
-                                onValueChange = { browserPreferences.enableShorts.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_shorts_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_shorts_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            )
-
-                            PreferenceDivider()
 
                             SwitchPreference(
                                 value = enableTabRecents,

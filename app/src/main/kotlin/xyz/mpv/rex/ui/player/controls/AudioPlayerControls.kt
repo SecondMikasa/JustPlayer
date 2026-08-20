@@ -1,11 +1,9 @@
 package xyz.mpv.rex.ui.player.controls
-import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.media.MediaMetadataRetriever
-import android.util.LruCache
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode as AnimRepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -70,8 +68,12 @@ import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Timer
+import androidx.compose.animation.graphics.ExperimentalAnimationGraphicsApi
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -145,7 +147,12 @@ import kotlin.math.sin
  *  │  [  EQ  shuf  rpt  spd  ⏱  ≡ ] │
  *  └─────────────────────────────────┘
  */
-@OptIn(ExperimentalFoundationApi::class)
+@OptIn(
+  ExperimentalAnimationGraphicsApi::class,
+  ExperimentalMaterial3Api::class,
+  ExperimentalMaterial3ExpressiveApi::class,
+  ExperimentalFoundationApi::class,
+)
 @Composable
 fun AudioPlayerControls(
   viewModel: PlayerViewModel,
@@ -168,8 +175,8 @@ fun AudioPlayerControls(
   val mediaTitle = activity.getTitleForControls()
   val artist = rawArtist?.takeIf { it.isNotBlank() }
     ?: rawAlbumArtist?.takeIf { it.isNotBlank() }
-  val artwork = rememberAudioArtwork(currentPath)
-  val artworkResolved = rememberArtworkResolved(currentPath)
+  val artwork by viewModel.currentThumbnail.collectAsState()
+  val artworkResolved = true // extracted eagerly in VM/Activity
 
   // ── Playlist ─────────────────────────────────────────────────────────────
   val hasPlaylist  = viewModel.hasPlaylistSupport()
@@ -217,17 +224,14 @@ fun AudioPlayerControls(
     val window = (view.context as? android.app.Activity)?.window
     if (window != null) {
       val controller = WindowCompat.getInsetsController(window, view)
-      controller.show(WindowInsetsCompat.Type.statusBars())
-      controller.show(WindowInsetsCompat.Type.navigationBars())
-      controller.systemBarsBehavior =
-        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+      controller.show(WindowInsetsCompat.Type.systemBars())
+      controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
     }
     onDispose {
       // Restore fullscreen / hide bars when switching back to video player
       if (window != null) {
         val controller = WindowCompat.getInsetsController(window, view)
-        controller.hide(WindowInsetsCompat.Type.statusBars())
-        controller.hide(WindowInsetsCompat.Type.navigationBars())
+        controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior =
           WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
       }
@@ -244,6 +248,7 @@ fun AudioPlayerControls(
   }
 
   // ── Root ─────────────────────────────────────────────────────────────────
+  val currentArtwork = artwork
   Box(
     modifier = modifier
       .fillMaxSize()
@@ -251,9 +256,9 @@ fun AudioPlayerControls(
   ) {
 
     // Blurred album-art backdrop (only when artwork exists)
-    if (artwork != null) {
+    if (currentArtwork != null && !currentArtwork.isRecycled) {
       Image(
-        bitmap = remember(artwork) { artwork.asImageBitmap() },
+        bitmap = remember(currentArtwork) { currentArtwork.asImageBitmap() },
         contentDescription = null,
         contentScale = ContentScale.Crop,
         modifier = Modifier.fillMaxSize().blur(60.dp),
@@ -308,10 +313,10 @@ fun AudioPlayerControls(
           .fillMaxWidth(0.78f)
           .aspectRatio(1f)
           .align(Alignment.CenterHorizontally)
-          .clip(if (artwork != null) RoundedCornerShape(16.dp) else CircleShape),
+          .clip(if (currentArtwork != null) RoundedCornerShape(16.dp) else CircleShape),
       ) {
-        if (artwork != null) {
-          AudioCoverArt(artwork)
+        if (currentArtwork != null) {
+          AudioCoverArt(currentArtwork)
         } else if (artworkResolved) {
           // Only show the wireframe once we've confirmed there is no embedded artwork.
           // This prevents a one-frame sphere flash when switching back to video mode.
@@ -682,6 +687,27 @@ fun AudioPlayerControls(
     onDismissRequest = { onOpenPanel(Panels.None) },
   )
 
+  // ── Full-screen loading overlay to prevent thumbnail/cover flash ───────
+  val isLoading by viewModel.isLoading.collectAsState()
+  val showLoadingCircle by playerPrefs.showLoadingCircle.collectAsState()
+
+  AnimatedVisibility(
+    visible = isLoading,
+    enter = EnterTransition.None,
+    exit = fadeOut(),
+  ) {
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(Color.Black),
+      contentAlignment = Alignment.Center
+    ) {
+      if (showLoadingCircle) {
+        LoadingIndicator(modifier = Modifier.size(96.dp))
+      }
+    }
+  }
+
   // Audio Properties sheet
   if (showAudioProperties) {
     AudioPropertiesSheet(path = currentPath, onDismiss = { showAudioProperties = false })
@@ -767,8 +793,6 @@ private fun drawWireframeSphere(
     // Rotate around Y axis
     val xr = x0 * cos(rotationY) + z0 * sin(rotationY)
     val yr = y0
-    // zr used only for depth culling
-    val zr = -x0 * sin(rotationY) + z0 * cos(rotationY)
     return Offset(cx + xr * radius, cy - yr * radius)
   }
 
@@ -837,7 +861,7 @@ private fun ActionBarButton(
 
 @Composable
 private fun AudioCoverArt(bitmap: Bitmap?) {
-  if (bitmap != null) {
+  if (bitmap != null && !bitmap.isRecycled) {
     Image(
       bitmap = remember(bitmap) { bitmap.asImageBitmap() },
       contentDescription = null,
@@ -865,16 +889,17 @@ private fun AudioPropertiesSheet(
 ) {
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-  // Reactive: all values recompose if MPV switches track while sheet is open
-  val codec      by MPVLib.propString["audio-codec-name"].collectAsState()
-  val fileFormat by MPVLib.propString["file-format"].collectAsState()
-  val sampleRate by MPVLib.propInt["audio-params/samplerate"].collectAsState()
-  val bitrateRaw by MPVLib.propInt["audio-bitrate"].collectAsState()
-  val channels   by MPVLib.propString["audio-params/channels"].collectAsState()
-  val propTitle  by MPVLib.propString["metadata/by-key/title"].collectAsState()
-  val propArtist by MPVLib.propString["metadata/by-key/artist"].collectAsState()
-  val propAlbumArtist by MPVLib.propString["metadata/by-key/album_artist"].collectAsState()
-  val propAlbum  by MPVLib.propString["metadata/by-key/album"].collectAsState()
+  // Synchronous pull for initial values, then reactive updates.
+  // This prevents showing stale values from a previous track when the sheet is first opened.
+  val codec      by MPVLib.propString["audio-codec-name"].collectAsState(initial = remember { MPVLib.getPropertyString("audio-codec-name") })
+  val fileFormat by MPVLib.propString["file-format"].collectAsState(initial = remember { MPVLib.getPropertyString("file-format") })
+  val sampleRate by MPVLib.propInt["audio-params/samplerate"].collectAsState(initial = remember { MPVLib.getPropertyInt("audio-params/samplerate") })
+  val bitrateRaw by MPVLib.propInt["audio-bitrate"].collectAsState(initial = remember { MPVLib.getPropertyInt("audio-bitrate") })
+  val channels   by MPVLib.propString["audio-params/channels"].collectAsState(initial = remember { MPVLib.getPropertyString("audio-params/channels") })
+  val propTitle  by MPVLib.propString["metadata/by-key/title"].collectAsState(initial = remember { MPVLib.getPropertyString("metadata/by-key/title") })
+  val propArtist by MPVLib.propString["metadata/by-key/artist"].collectAsState(initial = remember { MPVLib.getPropertyString("metadata/by-key/artist") })
+  val propAlbumArtist by MPVLib.propString["metadata/by-key/album_artist"].collectAsState(initial = remember { MPVLib.getPropertyString("metadata/by-key/album_artist") })
+  val propAlbum  by MPVLib.propString["metadata/by-key/album"].collectAsState(initial = remember { MPVLib.getPropertyString("metadata/by-key/album") })
   // path is also reactive — read from the outer scope which already tracks it
 
   val codecStr = codec ?: "—"
@@ -971,68 +996,5 @@ private fun PropRow(label: String, value: String) {
   Spacer(Modifier.height(6.dp))
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Artwork cache
-// ─────────────────────────────────────────────────────────────────────────────
 
-private object AudioArtworkCache {
-  // Only stores non-null bitmaps — android.util.LruCache throws NPE on put(key, null)
-  private val cache = LruCache<String, Bitmap>(16)
-  // Tracks paths that were resolved but had no artwork, to avoid re-fetching
-  private val noArtwork = mutableSetOf<String>()
 
-  suspend fun resolve(context: Context, path: String): Bitmap? =
-    withContext(Dispatchers.IO) {
-      // Check positive cache
-      synchronized(cache) { cache[path] }?.let { return@withContext it }
-      // Check negative cache (no artwork found previously)
-      if (synchronized(noArtwork) { noArtwork.contains(path) }) return@withContext null
-
-      val retriever = MediaMetadataRetriever()
-      val bitmap = try {
-        if (path.startsWith("content://"))
-          retriever.setDataSource(context, path.toUri())
-        else
-          retriever.setDataSource(path.removePrefix("file://"))
-        retriever.embeddedPicture?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
-      } catch (_: Exception) {
-        null
-      } finally {
-        runCatching { retriever.release() }
-      }
-      if (bitmap != null) {
-        synchronized(cache) { cache.put(path, bitmap) }
-      } else {
-        synchronized(noArtwork) { noArtwork.add(path) }
-      }
-      bitmap
-    }
-}
-
-@Composable
-private fun rememberAudioArtwork(path: String?): Bitmap? {
-  val context = LocalContext.current
-  // Always start null so the wireframe shows immediately when path changes,
-  // then update once the async resolution finishes.
-  var artwork by remember(path) { mutableStateOf<Bitmap?>(null) }
-  LaunchedEffect(path) {
-    artwork = if (path.isNullOrBlank()) null
-              else AudioArtworkCache.resolve(context, path)
-  }
-  return artwork
-}
-
-/** Returns true once the artwork resolution for [path] has completed (bitmap or confirmed absent). */
-@Composable
-private fun rememberArtworkResolved(path: String?): Boolean {
-  val context = LocalContext.current
-  var resolved by remember(path) { mutableStateOf(false) }
-  LaunchedEffect(path) {
-    resolved = false
-    if (!path.isNullOrBlank()) {
-      AudioArtworkCache.resolve(context, path)
-    }
-    resolved = true
-  }
-  return resolved
-}

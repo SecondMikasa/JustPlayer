@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.core.net.toUri
 import xyz.mpv.rex.preferences.BrowserPreferences
 import xyz.mpv.rex.preferences.FolderSortType
-import xyz.mpv.rex.repository.MediaFileRepository
 import xyz.mpv.rex.utils.sort.SortUtils
 import xyz.mpv.rex.utils.storage.FileFilterUtils
 import xyz.mpv.rex.utils.storage.FileTypeUtils
@@ -46,11 +45,12 @@ object FolderPlaylistOps : KoinComponent {
         return null
       }
 
+      val isAudio = FileTypeUtils.isAudioFile(currentFile)
       val showAudio = browserPreferences.showAudioFiles.get()
       val files = parentFolder.listFiles { file ->
         file.isFile &&
           !FileFilterUtils.shouldSkipFile(file) &&
-          (FileTypeUtils.isVideoFile(file) || (showAudio && FileTypeUtils.isAudioFile(file)))
+          (FileTypeUtils.isVideoFile(file) || ((showAudio || isAudio) && FileTypeUtils.isAudioFile(file)))
       } ?: return null
 
       val lSource = launchSource ?: ""
@@ -118,24 +118,17 @@ object FolderPlaylistOps : KoinComponent {
    * @return Pair of (uris, initialIndex) or null if single/invalid file.
    */
   suspend fun generateMediaLibraryPlaylist(
-    context: Context,
     currentPath: String,
   ): Pair<List<Uri>, Int>? {
     runCatching {
-      val allVideos = MediaFileRepository.getAllVideos(context)
-      val videoSortType = browserPreferences.videoSortType.get()
-      val videoSortOrder = browserPreferences.videoSortOrder.get()
+      val koin = org.koin.core.context.GlobalContext.get()
+      val hybridIndex = koin.get<xyz.mpv.rex.database.repository.HybridMediaIndexRepository>()
+      val allSongs = hybridIndex.getAllSongs()
+      
+      if (allSongs.size <= 1) return null
 
-      var filteredVideos = allVideos
-      if (!browserPreferences.showAudioFiles.get()) {
-        filteredVideos = allVideos.filterNot { it.isAudio }
-      }
-
-      val sortedVideos = SortUtils.sortVideos(filteredVideos, videoSortType, videoSortOrder)
-      if (sortedVideos.size <= 1) return null
-
-      val newPlaylist = sortedVideos.map { it.uri }
-      val newIndex = sortedVideos.indexOfFirst { it.path == currentPath || it.uri.toString() == currentPath }
+      val newPlaylist = allSongs.map { it.uri }
+      val newIndex = allSongs.indexOfFirst { it.path == currentPath || it.uri.toString() == currentPath }
 
       if (newIndex != -1) {
         return Pair(newPlaylist, newIndex)

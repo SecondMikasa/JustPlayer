@@ -2,6 +2,7 @@ package xyz.mpv.rex.ui.player.controls
 
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.LinearOutSlowInEasing
@@ -1881,6 +1882,27 @@ fun PlayerControls(
       panelShown = panel,
       onDismissRequest = { onOpenPanel(Panels.None) },
     )
+
+    // ── Full-screen loading overlay to prevent thumbnail/cover flash ───────
+    val isLoading by viewModel.isLoading.collectAsState()
+    val showLoadingCircle by playerPreferences.showLoadingCircle.collectAsState()
+
+    AnimatedVisibility(
+      visible = isLoading,
+      enter = EnterTransition.None,
+      exit = fadeOut(),
+    ) {
+      Box(
+        modifier = Modifier
+          .fillMaxSize()
+          .background(Color.Black),
+        contentAlignment = Alignment.Center
+      ) {
+        if (showLoadingCircle) {
+          LoadingIndicator(modifier = Modifier.size(96.dp))
+        }
+      }
+    }
   }
 }
 

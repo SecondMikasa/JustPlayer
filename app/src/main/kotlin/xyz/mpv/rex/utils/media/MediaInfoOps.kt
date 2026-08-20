@@ -1,6 +1,7 @@
 package xyz.mpv.rex.utils.media
 
 import android.content.Context
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -323,7 +324,16 @@ object MediaInfoOps {
 
           // Extract duration in milliseconds - handle both integer and decimal formats
           val durationStr = mi.getInfo(MediaInfo.Stream.General, 0, "Duration")
-          val duration = durationStr.toDoubleOrNull()?.toLong() ?: 0L
+          var duration = durationStr.toDoubleOrNull()?.toLong() ?: 0L
+
+          if (duration <= 0) {
+            runCatching {
+              val retriever = MediaMetadataRetriever()
+              retriever.setDataSource(context, uri)
+              duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull() ?: 0L
+              retriever.release()
+            }
+          }
 
           // Extract tags
           val artist = mi.getInfo(MediaInfo.Stream.General, 0, "Performer")

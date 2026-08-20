@@ -85,6 +85,7 @@ import androidx.compose.ui.geometry.Offset
 import xyz.mpv.rex.presentation.components.PlayerSheet
 import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.ui.theme.spacing
+import xyz.mpv.rex.utils.media.MediaThumbnailUtils
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -99,6 +100,7 @@ data class PlaylistItem(
   val path: String = "", // Video path for thumbnail loading
   val duration: String = "", // Duration in formatted string (e.g., "10:30")
   val resolution: String = "", // Resolution (e.g., "1920x1080")
+  val isAudio: Boolean = false,
 )
 
 /**
@@ -121,129 +123,6 @@ class LRUBitmapCache(private val maxSize: Int) {
   fun containsKey(key: String): Boolean = synchronized(this) { cache.containsKey(key) }
 
   fun clear() = synchronized(this) { cache.clear() }
-}
-
-/**
- * Loads a thumbnail from MediaStore cache (much faster than generating new thumbnails).
- * Uses the modern loadThumbnail API on Android Q+ for better performance.
- * Falls back to null if no cached thumbnail exists (in which case a placeholder will be shown).
- */
-private suspend fun loadMediaStoreThumbnail(context: Context, uri: Uri): Bitmap? {
-  return withContext(Dispatchers.IO) {
-    try {
-      when (uri.scheme) {
-        // For content:// URIs, we need to find the video ID first
-        "content" -> {
-          val videoId = extractVideoId(uri, context)
-          if (videoId != null) {
-            // Use modern API on Android Q+
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-              val contentUri = android.content.ContentUris.withAppendedId(
-                MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                videoId
-              )
-              context.contentResolver.loadThumbnail(
-                contentUri,
-                android.util.Size(512, 512),
-                null
-              )
-            } else {
-              @Suppress("DEPRECATION")
-              Thumbnails.getThumbnail(
-                context.contentResolver,
-                videoId,
-                Thumbnails.MINI_KIND,
-                null
-              )
-            }
-          } else {
-            null
-          }
-        }
-        // For file:// URIs, try to find the corresponding MediaStore entry
-        "file" -> {
-          val filePath = uri.path ?: return@withContext null
-          val projection = arrayOf(MediaStore.Video.Media._ID)
-          val selection = "${MediaStore.Video.Media.DATA} = ?"
-          val selectionArgs = arrayOf(filePath)
-
-          context.contentResolver.query(
-            MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-            projection,
-            selection,
-            selectionArgs,
-            null
-          )?.use { cursor ->
-            if (cursor.moveToFirst()) {
-              val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-              val videoId = cursor.getLong(idColumn)
-              
-              // Use modern API on Android Q+
-              if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-                val contentUri = android.content.ContentUris.withAppendedId(
-                  MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-                  videoId
-                )
-                context.contentResolver.loadThumbnail(
-                  contentUri,
-                  android.util.Size(512, 512),
-                  null
-                )
-              } else {
-                @Suppress("DEPRECATION")
-                Thumbnails.getThumbnail(
-                  context.contentResolver,
-                  videoId,
-                  Thumbnails.MINI_KIND,
-                  null
-                )
-              }
-            } else {
-              null
-            }
-          }
-        }
-        else -> null
-      }
-    } catch (e: Exception) {
-      // Fallback with placeholder if thumbnail loading fails
-      android.util.Log.w("PlaylistSheet", "Failed to load MediaStore thumbnail for $uri", e)
-      null
-    }
-  }
-}
-
-/**
- * Extracts the video ID from a content:// URI.
- */
-private fun extractVideoId(uri: Uri, context: Context): Long? {
-  return try {
-    val path = uri.path ?: return null
-    // Extract ID from path like /external/video/media/123
-    val idString = path.substringAfterLast('/').toLongOrNull() ?: return null
-
-    // Verify this ID exists in MediaStore
-    val projection = arrayOf(MediaStore.Video.Media._ID)
-    val selection = "${MediaStore.Video.Media._ID} = ?"
-    val selectionArgs = arrayOf(idString.toString())
-
-    context.contentResolver.query(
-      MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
-      projection,
-      selection,
-      selectionArgs,
-      null
-    )?.use { cursor ->
-      if (cursor.moveToFirst()) {
-        val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
-        cursor.getLong(idColumn)
-      } else {
-        null
-      }
-    }
-  } catch (e: Exception) {
-    null
-  }
 }
 
 @Composable
@@ -636,7 +515,7 @@ fun PlaylistTrackListItem(
   // Skip thumbnail loading for M3U playlists (network streams)
   LaunchedEffect(videoPath) {
     if (!skipThumbnail && !thumbnailCache.containsKey(videoPath)) {
-      val bmp = loadMediaStoreThumbnail(context, item.uri)
+      val bmp = MediaThumbnailUtils.extractThumbnailOrCoverArt(context, item.uri)
       thumbnail = bmp
       thumbnailCache[videoPath] = bmp
     }
@@ -787,22 +666,24 @@ fun PlaylistTrackListItem(
           }
           
           // Resolution chip
-          if (item.resolution.isNotEmpty()) {
-            Surface(
-              color = if (item.isPlaying) accentColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHighest,
-              shape = RoundedCornerShape(4.dp),
-            ) {
-              Text(
-                text = item.resolution,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                style = MaterialTheme.typography.labelSmall.copy(
-                  fontSize = 10.sp,
-                ),
-                color = if (item.isPlaying) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
-              )
+          if (!item.isAudio) {
+            if (item.resolution.isNotEmpty()) {
+              Surface(
+                color = if (item.isPlaying) accentColor.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceContainerHighest,
+                shape = RoundedCornerShape(4.dp),
+              ) {
+                Text(
+                  text = item.resolution,
+                  modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                  style = MaterialTheme.typography.labelSmall.copy(
+                    fontSize = 10.sp,
+                  ),
+                  color = if (item.isPlaying) accentColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+              }
+            } else {
+              LoadingChip(width = 60.dp)
             }
-          } else {
-            LoadingChip(width = 60.dp)
           }
         }
       }

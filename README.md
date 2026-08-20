@@ -57,7 +57,7 @@ mpvRex is an advanced, customizable video player for Android. It combines the ve
 
 ### 🎨 UI & Aesthetics
 
-- **Glass Theme Player UI** — sleek glassmorphism design across controls, seekbar, title bar, speed indicator, and Shorts player
+- **Glass Theme Player UI** — sleek glassmorphism design across controls, seekbar, title bar, and speed indicator
 - **Dynamic Tab Manager** — hide, show, and reorder dashboard tabs to fully customize your bottom navigation
 - **Material You** — player controls dynamically match your Android system accent or app theme
 - **Theme Transition Animation** — premium circular reveal animation when toggling between light and dark themes
@@ -75,7 +75,6 @@ mpvRex is an advanced, customizable video player for Android. It combines the ve
 - **Network Streaming Proxy** — high-performance proxy for WebDAV, SMB, and FTP streams with image preview caching
 - **Mark As System** — mark videos as watched, skipped, new, or flagged; filter your library accordingly
 - **Media Library View** — browse your full video collection outside the file tree
-- **Shorts Mode** — overhauled vertical video player with directory source filters, session Free Mode, Clean UI Mode, and reactive MPV observers
 
 ### ⚙️ Engine & Customization
 
@@ -104,14 +103,6 @@ mpvRex is an advanced, customizable video player for Android. It combines the ve
 </div>
 
 <p align="center"><i>Preview builds may be unstable and are intended for testing only.</i></p>
-
----
-
-## Translations
-
-Translations can be managed using **[Droidlate](https://github.com/estiaksoyeb/Droidlate)** ([PyPI](https://pypi.org/project/droidlate/)) — a local, web-based UI designed for editing Android `strings.xml` translation files.
-
-If you would like to contribute to translating mpvRex into your language, please refer to the [Translation Contribution Guide](CONTRIBUTING.md#translation-contributions) for step-by-step instructions on running Droidlate locally.
 
 ---
 

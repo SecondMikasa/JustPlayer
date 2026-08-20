@@ -130,6 +130,8 @@ class MusicLibraryViewModel(
       try {
         _isLoading.value = true
         _items.value = hybridMediaIndexRepository.getAllSongs()
+        // Ensure background enrichment is running to pick up audio metadata (durations/tags)
+        hybridMediaIndexRepository.startBackgroundEnrichment()
       } catch (e: Exception) {
         Log.e(tag, "Error loading music library", e)
       } finally {

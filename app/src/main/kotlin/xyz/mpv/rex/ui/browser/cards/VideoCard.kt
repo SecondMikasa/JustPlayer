@@ -117,7 +117,7 @@ fun VideoCard(
   }
 
   BaseMediaCard(
-    title = video.displayName,
+    title = if (video.isAudio) video.title else video.displayName,
     listTitleStyle = MaterialTheme.typography.bodyMedium,
     modifier = modifier,
     thumbnailAspectRatio = 16f / 9f,

@@ -148,11 +148,11 @@ object MusicLibraryScreen : Screen {
       else               -> stringResource(R.string.music)
     }
 
-    // How to open a song for playback:
-    // "media_library_list" causes PlayerActivity to call generateMediaLibraryPlaylist()
-    // which builds a queue of ALL music library files — so the whole library is
-    // the play queue, next/prev works across every song, and the in-player ≡ shows all.
-    fun playSong(song: Video) = MediaUtils.playFile(song, context, "media_library_list")
+    // pass the current filtered view/album/artist list so all items are in queue
+    fun playSongWithQueue(song: Video, queue: List<Video>) {
+      val index = queue.indexOfFirst { it.id == song.id }.coerceAtLeast(0)
+      MediaUtils.playPlaylist(queue, index, context, "media_library_list")
+    }
 
     Scaffold(
       topBar = {
@@ -248,7 +248,7 @@ object MusicLibraryScreen : Screen {
                   songs = songs,
                   uiSettings = uiSettings,
                   selectionManager = null,   // no multi-select in drill-in
-                  onSongClick = ::playSong,
+                  onSongClick = { song -> playSongWithQueue(song, songs) },
                 )
               }
               openArtist != null -> {
@@ -257,7 +257,7 @@ object MusicLibraryScreen : Screen {
                   songs = songs,
                   uiSettings = uiSettings,
                   selectionManager = null,
-                  onSongClick = ::playSong,
+                  onSongClick = { song -> playSongWithQueue(song, songs) },
                 )
               }
               isLoading && filteredSongs.isEmpty() ->
@@ -267,7 +267,7 @@ object MusicLibraryScreen : Screen {
                   songs = filteredSongs,
                   uiSettings = uiSettings,
                   selectionManager = selectionManager,
-                  onSongClick = ::playSong,
+                  onSongClick = { song -> playSongWithQueue(song, filteredSongs) },
                 )
                 MusicTab.ALBUMS  -> AlbumGrid(albums = albums, onAlbumClick = { openAlbum = it })
                 MusicTab.ARTISTS -> ArtistList(artists = artists, onArtistClick = { openArtist = it })
