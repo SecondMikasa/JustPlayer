@@ -36,10 +36,12 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -408,6 +410,21 @@ class HybridMediaIndexRepository(
       .sortedBy { it.title.lowercase() }
       .toList()
   }
+
+  /**
+   * Reactive variant of [getAllSongs]. Backed by [HybridMediaDao.observeAllAudio] which Room
+   * re-emits every time any row in hybrid_media_index changes — including the duration/metadata
+   * writes by background enrichment — so the music library UI picks up real durations without
+   * requiring a manual refresh.
+   */
+  fun getAllSongsFlow(): Flow<List<Video>> =
+    dao.observeAllAudio().map { entities ->
+      entities
+        .asSequence()
+        .map { it.toVideo() }
+        .sortedBy { it.title.lowercase() }
+        .toList()
+    }
 
   suspend fun getAlbums(): List<MusicAlbum> = withContext(Dispatchers.IO) {
     getAllSongs()

@@ -79,8 +79,6 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.LaunchedEffect
-import xyz.mpv.rex.ui.utils.CommunityIcon
-import xyz.mpv.rex.ui.browser.dialogs.CommunityLinksDialog
 
 /**
  * An action that appears in the selection-mode overflow (⋮) menu.
@@ -180,8 +178,6 @@ private fun NormalTopBar(
   val darkTheme = isSystemInDarkTheme()
   val themeTransition = LocalThemeTransitionState.current
   val coroutineScope = rememberCoroutineScope()
-  val showCommunityIcon by preferences.showCommunityIcon.collectAsState()
-  var showCommunityDialog by remember { mutableStateOf(false) }
   
   // Track title bounds for animation position
   val titleBounds = remember { mutableStateOf(Rect.Zero) }
@@ -318,45 +314,6 @@ private fun NormalTopBar(
           )
         }
       }
-      if (isHomeScreen && showCommunityIcon) {
-        val infiniteTransition = rememberInfiniteTransition(label = "communityIconAnim")
-        val rotation by infiniteTransition.animateFloat(
-          initialValue = -8f,
-          targetValue = 8f,
-          animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = androidx.compose.animation.core.EaseInOutQuad),
-            repeatMode = RepeatMode.Reverse
-          ),
-          label = "rotation"
-        )
-        val scale by infiniteTransition.animateFloat(
-          initialValue = 0.95f,
-          targetValue = 1.05f,
-          animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 1500, easing = androidx.compose.animation.core.EaseInOutQuad),
-            repeatMode = RepeatMode.Reverse
-          ),
-          label = "scale"
-        )
-
-        IconButton(
-          onClick = { showCommunityDialog = true },
-          modifier = Modifier
-            .padding(horizontal = 2.dp)
-            .graphicsLayer {
-              rotationZ = rotation
-              scaleX = scale
-              scaleY = scale
-            },
-        ) {
-          Icon(
-            imageVector = CommunityIcon,
-            contentDescription = stringResource(R.string.community_links),
-            modifier = Modifier.size(24.dp),
-            tint = MaterialTheme.colorScheme.secondary,
-          )
-        }
-      }
       if (onSortClick != null) {
         IconButton(
           onClick = onSortClick,
@@ -425,11 +382,6 @@ private fun NormalTopBar(
     modifier = modifier,
   )
 
-  if (showCommunityDialog) {
-    CommunityLinksDialog(
-      onDismissRequest = { showCommunityDialog = false }
-    )
-  }
 }
 
 /**

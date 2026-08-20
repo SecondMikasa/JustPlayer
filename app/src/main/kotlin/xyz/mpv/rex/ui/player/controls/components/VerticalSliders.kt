@@ -4,6 +4,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,6 +27,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.animation.core.FastOutSlowInEasing
 import org.koin.compose.koinInject
@@ -37,10 +39,13 @@ import xyz.mpv.rex.ui.player.controls.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -339,9 +344,20 @@ fun VolumeSlider(
   boostRange: ClosedRange<Int>?,
   modifier: Modifier = Modifier,
   displayAsPercentage: Boolean = false,
-  isActive: Boolean = false
+  isActive: Boolean = false,
+  /** Called with the new absolute volume level when the user drags the slider. */
+  onVolumeChange: ((Int) -> Unit)? = null,
+  /** Called with true when the user starts dragging, false when they release.
+   *  The caller uses this to keep the slider visible while the user is interacting. */
+  onInteractionChange: ((Boolean) -> Unit)? = null,
 ) {
   val percentage = (percentage(volume, range) * 100).roundToInt()
+
+  // Accumulate sub-step drag pixels so small drags still register as a volume change.
+  // One "step" = 8dp of vertical drag per volume unit.
+  val dragAccumulator = remember { mutableFloatStateOf(0f) }
+  val trackHeightPx = remember { mutableFloatStateOf(1f) }  // populated by onSizeChanged below
+
   Surface(
     modifier = modifier,
     shape = RoundedCornerShape(20.dp),
@@ -352,7 +368,35 @@ fun VolumeSlider(
     border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
   ) {
     Column(
-      modifier = Modifier.padding(horizontal = 12.dp, vertical = 16.dp),
+      modifier = Modifier
+        .padding(horizontal = 12.dp, vertical = 16.dp)
+        .pointerInput(range, onVolumeChange) {
+          detectVerticalDragGestures(
+            onDragStart = {
+              dragAccumulator.floatValue = 0f
+              onInteractionChange?.invoke(true)
+            },
+            onDragEnd = { onInteractionChange?.invoke(false) },
+            onDragCancel = { onInteractionChange?.invoke(false) },
+            onVerticalDrag = { change, dragAmount ->
+              change.consume()
+              // dragAmount is negative when dragging up (increase volume).
+              // Map full slider height to the full volume range so a full swipe
+              // from bottom to top changes volume from 0 to max.
+              val rangeSize = (range.endInclusive - range.start).coerceAtLeast(1)
+              val sliderHeightPx = trackHeightPx.floatValue.coerceAtLeast(1f)
+              val delta = (-dragAmount / sliderHeightPx) * rangeSize
+              dragAccumulator.floatValue += delta
+              val steps = dragAccumulator.floatValue.toInt()
+              if (steps != 0) {
+                dragAccumulator.floatValue -= steps
+                val newVolume = (volume + steps).coerceIn(range.start, range.endInclusive)
+                onVolumeChange?.invoke(newVolume)
+              }
+            },
+          )
+        }
+        .onSizeChanged { trackHeightPx.floatValue = it.height.toFloat() },
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.smaller),
     ) {

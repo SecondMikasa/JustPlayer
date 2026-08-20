@@ -1,6 +1,7 @@
 package xyz.mpv.rex.ui.player.controls
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.view.WindowManager
 import androidx.activity.compose.LocalActivity
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
@@ -84,6 +85,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -97,16 +99,27 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material.icons.filled.VolumeUp
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.net.toUri
 import `is`.xyz.mpv.MPVLib
+import xyz.mpv.rex.ui.player.controls.components.VolumeSlider
+import xyz.mpv.rex.ui.player.controls.components.BrightnessSlider
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.update
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import org.koin.compose.koinInject
+import xyz.mpv.rex.preferences.AudioPreferences
 import xyz.mpv.rex.preferences.AppearancePreferences
 import xyz.mpv.rex.preferences.PlayerPreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
@@ -199,6 +212,7 @@ fun AudioPlayerControls(
 
   // ── Preferences ──────────────────────────────────────────────────────────
   val playerPrefs      = koinInject<PlayerPreferences>()
+  val audioPrefs       = koinInject<AudioPreferences>()
   val appearancePrefs  = koinInject<AppearancePreferences>()
   val seekbarStyle     by appearancePrefs.seekbarStyle.collectAsState()
   val invertDuration   by playerPrefs.invertDuration.collectAsState()
@@ -223,13 +237,25 @@ fun AudioPlayerControls(
   DisposableEffect(view) {
     val window = (view.context as? android.app.Activity)?.window
     if (window != null) {
+      // Drop FLAG_LAYOUT_NO_LIMITS so the system can push insets into our layout when the
+      // notification shade is pulled down (status bar expanding moves the UI downward).
+      // Keep edge-to-edge (setDecorFitsSystemWindows = false) so our own padding modifiers
+      // still control the insets; only remove the flag that pins the window at no-limit size.
+      window.clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS)
       val controller = WindowCompat.getInsetsController(window, view)
       controller.show(WindowInsetsCompat.Type.systemBars())
+      // BEHAVIOR_DEFAULT: status bar responds normally to swipe gestures and the
+      // notification shade expands on pull, reflowing the layout via statusBarsPadding().
       controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
     }
     onDispose {
       // Restore fullscreen / hide bars when switching back to video player
       if (window != null) {
+        // Re-add FLAG_LAYOUT_NO_LIMITS for the video player's immersive mode
+        window.setFlags(
+          WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+          WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+        )
         val controller = WindowCompat.getInsetsController(window, view)
         controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior =
@@ -273,8 +299,8 @@ fun AudioPlayerControls(
     Column(
       modifier = Modifier
         .fillMaxSize()
-        .windowInsetsPadding(WindowInsets.statusBars)
-        .windowInsetsPadding(WindowInsets.navigationBars)
+        .statusBarsPadding()
+        .navigationBarsPadding()
         .padding(horizontal = spacing.large, vertical = spacing.small),
     ) {
 
@@ -470,7 +496,17 @@ fun AudioPlayerControls(
             modifier = Modifier.size(32.dp),
           )
         }
-        IconButton(onClick = { viewModel.seekBy(-customSkipDuration) }) {
+        // Rewind: single tap seeks back, long-press opens skip-duration picker
+        Box(
+          modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .combinedClickable(
+              onClick = { viewModel.seekBy(-customSkipDuration) },
+              onLongClick = { onOpenSheet(Sheets.CustomSkipDuration) },
+            ),
+          contentAlignment = Alignment.Center,
+        ) {
           Icon(
             imageVector = Icons.Filled.FastRewind,
             contentDescription = "Rewind",
@@ -494,7 +530,17 @@ fun AudioPlayerControls(
             )
           }
         }
-        IconButton(onClick = { viewModel.seekBy(customSkipDuration) }) {
+        // Forward: single tap seeks forward, long-press opens skip-duration picker
+        Box(
+          modifier = Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .combinedClickable(
+              onClick = { viewModel.seekBy(customSkipDuration) },
+              onLongClick = { onOpenSheet(Sheets.CustomSkipDuration) },
+            ),
+          contentAlignment = Alignment.Center,
+        ) {
           Icon(
             imageVector = Icons.Filled.FastForward,
             contentDescription = "Forward",
@@ -563,16 +609,71 @@ fun AudioPlayerControls(
           active = sleepTimerTimeRemaining > 0,
           onClick = { onOpenSheet(Sheets.SleepTimer) },
         )
-        // Queue / playlist  — opens the full PlaylistSheet (same as video player)
+        // Sound / Volume
+        val isMuted by MPVLib.propBoolean["mute"].collectAsState()
         ActionBarButton(
-          icon = { Icon(Icons.AutoMirrored.Filled.QueueMusic, null) },
-          active = false,
-          onClick = { onOpenSheet(Sheets.Playlist) },
+          icon = {
+            Icon(
+              if (isMuted == true) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+              null,
+            )
+          },
+          active = isMuted == true,
+          onClick = { viewModel.toggleMute() },
+          onLongClick = { viewModel.displayVolumeSlider() }
         )
       }
 
       Spacer(modifier = Modifier.height(spacing.small))
     } // end Column
+
+    // ── Volume Slider ───────────────────────────────────────────────────
+    val isVolumeSliderShown by viewModel.isVolumeSliderShown.collectAsState()
+    val volume by viewModel.currentVolume.collectAsState()
+    val mpvVolume by MPVLib.propInt["volume"].collectAsState()
+    val volumeSliderTimestamp by viewModel.volumeSliderTimestamp.collectAsState()
+    // True while the user's finger is on the slider — used to pause the auto-hide timer.
+    var isVolumeSliderInteracting by remember { mutableStateOf(false) }
+
+    // Auto-hide: 3 s after the last interaction ends. The timer resets whenever
+    // volumeSliderTimestamp changes (new long-press) and is suspended while the user drags.
+    LaunchedEffect(volumeSliderTimestamp, isVolumeSliderInteracting) {
+        if (isVolumeSliderShown && volumeSliderTimestamp > 0 && !isVolumeSliderInteracting) {
+            delay(3000L)
+            viewModel.isVolumeSliderShown.update { false }
+        }
+    }
+
+    AnimatedVisibility(
+        isVolumeSliderShown,
+        enter = fadeIn() + slideInHorizontally { it },
+        exit = fadeOut() + slideOutHorizontally { it },
+        modifier = Modifier
+            .align(Alignment.CenterEnd)
+            .padding(end = spacing.extraLarge)
+    ) {
+        val boostCap by audioPrefs.volumeBoostCap.collectAsState()
+        val displayVolumeAsPercentage by playerPrefs.displayVolumeAsPercentage.collectAsState()
+        
+        val currentBoost = (mpvVolume ?: 100) - 100
+        val showBoost = boostCap > 0 || currentBoost > 0
+        val effBoostCap = maxOf(boostCap, currentBoost)
+        
+        VolumeSlider(
+            volume,
+            mpvVolume = mpvVolume ?: 100,
+            range = 0..viewModel.maxVolume,
+            boostRange = if (showBoost) 0..effBoostCap else null,
+            displayAsPercentage = displayVolumeAsPercentage,
+            isActive = isVolumeSliderInteracting,
+            onVolumeChange = { newVol -> viewModel.changeVolumeTo(newVol) },
+            onInteractionChange = { active ->
+                isVolumeSliderInteracting = active
+                // Reset the auto-hide countdown each time the user starts a new drag.
+                if (active) viewModel.displayVolumeSlider()
+            },
+        )
+    }
 
     // ── A-B Loop floating panel ───────────────────────────────────────────
     AnimatedVisibility(
@@ -842,8 +943,27 @@ private fun ActionBarButton(
   icon: @Composable () -> Unit,
   active: Boolean,
   onClick: () -> Unit,
+  onLongClick: (() -> Unit)? = null,
 ) {
-  IconButton(onClick = onClick) {
+  val haptic = LocalHapticFeedback.current
+  // Use a plain Box with combinedClickable instead of wrapping IconButton.
+  // IconButton consumes all pointer input internally, which prevents the combinedClickable
+  // modifier from ever receiving the long-press gesture. Box has no competing gesture handler.
+  Box(
+    modifier = Modifier
+      .size(48.dp)
+      .clip(CircleShape)
+      .combinedClickable(
+        onClick = onClick,
+        onLongClick = {
+          if (onLongClick != null) {
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            onLongClick()
+          }
+        },
+      ),
+    contentAlignment = Alignment.Center,
+  ) {
     androidx.compose.runtime.CompositionLocalProvider(
       androidx.compose.material3.LocalContentColor provides (
         if (active) MaterialTheme.colorScheme.primary
@@ -889,37 +1009,46 @@ private fun AudioPropertiesSheet(
 ) {
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-  // Synchronous pull for initial values, then reactive updates.
-  // This prevents showing stale values from a previous track when the sheet is first opened.
-  val codec      by MPVLib.propString["audio-codec-name"].collectAsState(initial = remember { MPVLib.getPropertyString("audio-codec-name") })
-  val fileFormat by MPVLib.propString["file-format"].collectAsState(initial = remember { MPVLib.getPropertyString("file-format") })
-  val sampleRate by MPVLib.propInt["audio-params/samplerate"].collectAsState(initial = remember { MPVLib.getPropertyInt("audio-params/samplerate") })
-  val bitrateRaw by MPVLib.propInt["audio-bitrate"].collectAsState(initial = remember { MPVLib.getPropertyInt("audio-bitrate") })
-  val channels   by MPVLib.propString["audio-params/channels"].collectAsState(initial = remember { MPVLib.getPropertyString("audio-params/channels") })
-  val propTitle  by MPVLib.propString["metadata/by-key/title"].collectAsState(initial = remember { MPVLib.getPropertyString("metadata/by-key/title") })
-  val propArtist by MPVLib.propString["metadata/by-key/artist"].collectAsState(initial = remember { MPVLib.getPropertyString("metadata/by-key/artist") })
-  val propAlbumArtist by MPVLib.propString["metadata/by-key/album_artist"].collectAsState(initial = remember { MPVLib.getPropertyString("metadata/by-key/album_artist") })
-  val propAlbum  by MPVLib.propString["metadata/by-key/album"].collectAsState(initial = remember { MPVLib.getPropertyString("metadata/by-key/album") })
-  // path is also reactive — read from the outer scope which already tracks it
+  // Snapshot all MPV properties reactively, keyed on `path` so they automatically
+  // refresh when the track changes. No `initial = remember { ... }` synchronous reads —
+  // those captured stale data from the previous song because MPV metadata arrives
+  // asynchronously after file load and the remember block ran too early.
+  val codec      by MPVLib.propString["audio-codec-name"].collectAsState()
+  val fileFormat by MPVLib.propString["file-format"].collectAsState()
+  val sampleRate by MPVLib.propInt["audio-params/samplerate"].collectAsState()
+  val bitrateRaw by MPVLib.propInt["audio-bitrate"].collectAsState()
+  val channels   by MPVLib.propString["audio-params/channels"].collectAsState()
+  val propTitle  by MPVLib.propString["metadata/by-key/title"].collectAsState()
+  val propArtist by MPVLib.propString["metadata/by-key/artist"].collectAsState()
+  val propAlbumArtist by MPVLib.propString["metadata/by-key/album_artist"].collectAsState()
+  val propAlbum  by MPVLib.propString["metadata/by-key/album"].collectAsState()
 
-  val codecStr = codec ?: "—"
-  val formatStr = fileFormat
-    ?.uppercase(Locale.US)?.split(",")?.firstOrNull() ?: "—"
-  val sampleRateStr = if (sampleRate != null && sampleRate!! > 0)
+  // When the path changes (new track), MPV emits updated metadata to the property flows above.
+  // The 150 ms delay lets MPV finish parsing the file's tags before the sheet first renders,
+  // preventing a brief flash of empty/stale values on fast machines.
+  val ready by produceState(initialValue = false, key1 = path) {
+    kotlinx.coroutines.delay(150)
+    value = true
+  }
+
+  val codecStr = if (ready) codec ?: "—" else "—"
+  val formatStr = if (ready) fileFormat
+    ?.uppercase(Locale.US)?.split(",")?.firstOrNull() ?: "—" else "—"
+  val sampleRateStr = if (ready && sampleRate != null && sampleRate!! > 0)
     "${sampleRate!! / 1000.0} kHz" else "—"
-  val bitrateStr = if (bitrateRaw != null && bitrateRaw!! > 0)
+  val bitrateStr = if (ready && bitrateRaw != null && bitrateRaw!! > 0)
     "${bitrateRaw!! / 1000} kbps" else "—"
-  val channelStr = when {
+  val channelStr = if (ready) when {
     channels?.contains("stereo", ignoreCase = true) == true -> "Stereo (2.0)"
     channels?.contains("mono",   ignoreCase = true) == true -> "Mono (1.0)"
     channels?.contains("5.1") == true                       -> "Surround (5.1)"
     channels?.contains("7.1") == true                       -> "Surround (7.1)"
     else -> channels ?: "—"
-  }
-  val titleStr = propTitle
-    ?: path?.substringAfterLast('/')?.substringBeforeLast('.') ?: "—"
-  val artistStr = propArtist ?: propAlbumArtist ?: "—"
-  val albumStr  = propAlbum ?: "—"
+  } else "—"
+  val titleStr = if (ready) propTitle
+    ?: path?.substringAfterLast('/')?.substringBeforeLast('.') ?: "—" else "—"
+  val artistStr = if (ready) propArtist ?: propAlbumArtist ?: "—" else "—"
+  val albumStr  = if (ready) propAlbum ?: "—" else "—"
 
   val fileSizeStr = remember(path) {
     if (path.isNullOrBlank()) return@remember "—"

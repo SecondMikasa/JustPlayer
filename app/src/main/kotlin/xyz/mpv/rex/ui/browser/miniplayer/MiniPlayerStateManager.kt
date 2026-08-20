@@ -26,6 +26,9 @@ data class MiniPlayerState(
   val isPaused: Boolean = false,
   val thumbnail: Bitmap? = null,
   val videoPath: String? = null,
+  /** True when the current media is audio-only. Used by openPlayer() to pass the correct
+   *  mode flag to PlayerActivity so it launches the audio UI instead of the video UI. */
+  val isAudio: Boolean = false,
   val hasNext: Boolean = false,
   val hasPrevious: Boolean = false,
   val nextTitle: String? = null,
@@ -76,6 +79,7 @@ class MiniPlayerStateManager : KoinComponent {
     isPaused: Boolean = _state.value.isPaused,
     thumbnail: Bitmap? = null,
     videoPath: String? = null,
+    isAudio: Boolean = _state.value.isAudio,
     hasNext: Boolean = _state.value.hasNext,
     hasPrevious: Boolean = _state.value.hasPrevious,
     nextTitle: String? = _state.value.nextTitle,
@@ -101,6 +105,7 @@ class MiniPlayerStateManager : KoinComponent {
         isPaused = isPaused,
         thumbnail = if (effectiveReset) thumbnail else (thumbnail ?: current.thumbnail),
         videoPath = effectiveVideoPath,
+        isAudio = isAudio,
         hasNext = hasNext,
         hasPrevious = hasPrevious,
         nextTitle = nextTitle,
@@ -239,6 +244,9 @@ class MiniPlayerStateManager : KoinComponent {
   fun openPlayer(context: Context) {
     val intent = Intent(context, PlayerActivity::class.java).apply {
       flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT
+      // Tell PlayerActivity whether this is an audio-only session so it launches
+      // AudioPlayerControls instead of the video player, regardless of file extension checks.
+      putExtra("is_audio", _state.value.isAudio)
       // Direct mini player mode: hand the live headless MPV session over to PlayerActivity
       // instead of starting a fresh playback (which would double-create MPV).
       if (headlessPlaybackController.isSessionActive) {

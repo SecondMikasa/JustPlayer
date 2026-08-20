@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import kotlinx.coroutines.flow.Flow
 import xyz.mpv.rex.database.entities.HybridMediaEntity
 import xyz.mpv.rex.database.entities.HybridMediaRootEntity
 
@@ -108,6 +109,20 @@ interface HybridMediaDao {
     """,
   )
   suspend fun getAllAudio(): List<HybridMediaEntity>
+
+  /**
+   * Reactive variant of [getAllAudio]. Room re-emits the full list every time any row in
+   * hybrid_media_index changes — this includes the [updateMediaMetadata] writes performed by
+   * background enrichment, so the music library UI updates in-place as durations arrive.
+   */
+  @Query(
+    """
+    SELECT * FROM hybrid_media_index
+    WHERE isAudio = 1 AND available = 1
+    ORDER BY displayName COLLATE NOCASE
+    """,
+  )
+  fun observeAllAudio(): Flow<List<HybridMediaEntity>>
 
   @Query("DELETE FROM hybrid_media_index")
   suspend fun clearMedia()

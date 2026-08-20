@@ -2109,6 +2109,7 @@ class PlayerActivity :
           artist = artist,
           thumbnail = activeThumb,
           videoPath = currentUri?.toString(),
+          isAudio = viewModel.isAudioMedia.value,
           hasNext = hasNext(),
           hasPrevious = hasPrevious(),
           nextTitle = nextTitle,
@@ -3161,6 +3162,11 @@ class PlayerActivity :
       return
     }
 
+    // Sync the current playlist order to HeadlessPlaybackController before the service starts.
+    // This ensures MiniPlayerStateManager.openPlayer() packages the live (possibly reordered)
+    // list into the re-launch intent, not the stale list from when the session was first opened.
+    syncPlaylistToHeadless()
+
     Log.d(TAG, "Starting background playback for: $fileName")
     
     // Ensure notification channel exists
@@ -3318,8 +3324,15 @@ class PlayerActivity :
 
   /**
    * Checks if current loaded media is audio-only.
+   *
+   * Checks the explicit "is_audio" intent extra first — this is set by
+   * [MiniPlayerStateManager.openPlayer] so that tapping the expanded mini player always
+   * re-opens the correct (audio) UI, regardless of whether the file extension or MPV track
+   * detection would otherwise resolve correctly.
    */
   private fun isCurrentMediaAudio(): Boolean {
+    // Explicit flag wins: set by MiniPlayerStateManager.openPlayer() for audio sessions.
+    if (intent.getBooleanExtra("is_audio", false)) return true
     val path = parsePathFromIntent(intent)
     if (path != null) {
       if (xyz.mpv.rex.utils.storage.FileTypeUtils.isAudioFile(File(path))) {
@@ -3546,6 +3559,23 @@ class PlayerActivity :
     val mpvPos = runCatching { MPVLib.getPropertyInt("playlist-pos") }.getOrNull() ?: 0
     val mpvHasPrev = mpvPos > 0
     return playlistHasPrev || mpvHasPrev
+  }
+
+  /**
+   * Pushes the current [PlaylistManager] snapshot into [HeadlessPlaybackController] so that
+   * [MiniPlayerStateManager.openPlayer] always bundles the live, reordered list when the user
+   * expands the mini player back to the full-screen player.
+   *
+   * Must be called any time the in-memory playlist is mutated (reorder, remove) and whenever
+   * the activity transitions to the background so the headless controller is up-to-date before
+   * ownership is transferred.
+   */
+  fun syncPlaylistToHeadless() {
+    val uris = viewModel.playlistManager.playlist.value
+    val index = viewModel.playlistManager.currentIndex.value
+    if (uris.isNotEmpty()) {
+      headlessPlaybackController.updatePlaylist(uris, index)
+    }
   }
 
   fun updateMiniPlayerPlaylistState() {

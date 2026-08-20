@@ -91,6 +91,24 @@ class HeadlessPlaybackController(private val appContext: Context) : KoinComponen
   private var resumeObserver: MPVLib.EventObserver? = null
   private var headlessObserver: MPVLib.EventObserver? = null
 
+  /**
+   * Syncs an updated playlist order from [PlayerActivity] into this controller so that
+   * [detachForHandoff] / [MiniPlayerStateManager.openPlayer] bundle the correct list when the
+   * user expands the mini player back to the full-screen player.
+   *
+   * Called whenever [PlaylistManager] is mutated while [PlayerActivity] owns MPV (reorder,
+   * remove, etc.) so the two playlist copies never drift apart.
+   */
+  fun updatePlaylist(uris: List<Uri>, currentIndex: Int) {
+    activeUris = uris
+    activeIndex = currentIndex.coerceIn(0, (uris.size - 1).coerceAtLeast(0))
+    // Re-generate shuffle indices so playNext/playPrevious still work correctly
+    // if the user is back in headless mode after a re-handoff.
+    if (playerPreferences.shuffleEnabled.get() && uris.isNotEmpty()) {
+      generateShuffledIndices(activeIndex)
+    }
+  }
+
   private fun generateShuffledIndices(startIdx: Int) {
     if (activeUris.isEmpty()) return
     val indices = activeUris.indices.filter { it != startIdx }.shuffled()

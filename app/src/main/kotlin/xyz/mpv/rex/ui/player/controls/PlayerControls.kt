@@ -559,13 +559,7 @@ fun PlayerControls(
           exit = fadeOut(playerControlsExitAnimationSpec()),
           modifier =
             Modifier
-              .then(
-                if (showSystemStatusBar) {
-                  Modifier.windowInsetsPadding(WindowInsets.statusBars)
-                } else {
-                  Modifier
-                }
-              )
+              .windowInsetsPadding(WindowInsets.statusBars)
               .constrainAs(playerUpdates) {
                 linkTo(parent.start, parent.end)
                 top.linkTo(parent.top, margin = osdTopMargin)
@@ -1309,13 +1303,7 @@ fun PlayerControls(
             },
           modifier =
             Modifier
-              .then(
-                if (showSystemStatusBar) {
-                  Modifier.windowInsetsPadding(WindowInsets.statusBars)
-                } else {
-                  Modifier
-                }
-              )
+              .windowInsetsPadding(WindowInsets.statusBars)
               .then(
                 if (showSystemNavigationBar) {
                   val navBarPadding = WindowInsets.navigationBars.asPaddingValues()
@@ -1377,13 +1365,7 @@ fun PlayerControls(
             },
           modifier =
             Modifier
-              .then(
-                if (showSystemStatusBar) {
-                  Modifier.windowInsetsPadding(WindowInsets.statusBars)
-                } else {
-                  Modifier
-                }
-              )
+              .windowInsetsPadding(WindowInsets.statusBars)
               .then(
                 if (showSystemNavigationBar) {
                   val navBarPadding = WindowInsets.navigationBars.asPaddingValues()

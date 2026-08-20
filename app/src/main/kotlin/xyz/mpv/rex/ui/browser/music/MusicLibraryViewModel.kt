@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -126,22 +127,33 @@ class MusicLibraryViewModel(
   }
 
   override fun loadData() {
+    // Collect the reactive Flow from Room so the list updates in-place whenever background
+    // metadata enrichment writes real durations back to the database — no manual refresh needed.
     viewModelScope.launch(Dispatchers.IO) {
+      _isLoading.value = true
       try {
-        _isLoading.value = true
-        _items.value = hybridMediaIndexRepository.getAllSongs()
-        // Ensure background enrichment is running to pick up audio metadata (durations/tags)
-        hybridMediaIndexRepository.startBackgroundEnrichment()
+        hybridMediaIndexRepository.getAllSongsFlow().collectLatest { songs ->
+          _items.value = songs
+          _isLoading.value = false
+        }
       } catch (e: Exception) {
-        Log.e(tag, "Error loading music library", e)
-      } finally {
+        Log.e(tag, "Error observing music library", e)
         _isLoading.value = false
       }
+    }
+    // Kick off background enrichment for any PENDING items (SAF / direct-scan files whose
+    // duration was not available from MediaStore at index time).
+    viewModelScope.launch(Dispatchers.IO) {
+      hybridMediaIndexRepository.startBackgroundEnrichment()
     }
   }
 
   override fun refresh(silent: Boolean) {
-    loadData()
+    // The Flow observer already picks up every DB change, so refresh only needs to
+    // re-trigger enrichment for newly added files that are still PENDING.
+    viewModelScope.launch(Dispatchers.IO) {
+      hybridMediaIndexRepository.startBackgroundEnrichment()
+    }
   }
 
   fun selectTab(tab: MusicTab) {

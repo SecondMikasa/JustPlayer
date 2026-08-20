@@ -1164,6 +1164,11 @@ class PlayerViewModel(
     volumeSliderTimestamp.value = System.currentTimeMillis()
   }
 
+  fun toggleMute() {
+    val currentMute = MPVLib.getPropertyBoolean("mute") ?: false
+    MPVLib.setPropertyBoolean("mute", !currentMute)
+  }
+
   // ==================== Video Aspect ====================
 
   private var _cachedVideoRotation = 0
@@ -1996,12 +2001,19 @@ class PlayerViewModel(
   fun reorderPlaylistItem(fromIndex: Int, toIndex: Int) {
     _playlistManager.reorder(fromIndex, toIndex)
     refreshPlaylistItems()
+    // Sync the new order to HeadlessPlaybackController and refresh mini player swipe previews
+    // so that going to the mini player immediately reflects the reordered queue.
+    (host as? PlayerActivity)?.syncPlaylistToHeadless()
+    (host as? PlayerActivity)?.updateMiniPlayerPlaylistState()
   }
 
   fun removePlaylistItem(index: Int) {
     val wasPlaying = index == _playlistManager.currentIndex.value
     _playlistManager.removeAt(index)
     refreshPlaylistItems()
+    // Sync removal to HeadlessPlaybackController and mini player previews
+    (host as? PlayerActivity)?.syncPlaylistToHeadless()
+    (host as? PlayerActivity)?.updateMiniPlayerPlaylistState()
     
     if (wasPlaying) {
       if (_playlistManager.playlist.value.isNotEmpty()) {
@@ -2022,6 +2034,9 @@ class PlayerViewModel(
       _playlistManager.removeAt(index)
     }
     refreshPlaylistItems()
+    // Sync removal to HeadlessPlaybackController and mini player previews
+    (host as? PlayerActivity)?.syncPlaylistToHeadless()
+    (host as? PlayerActivity)?.updateMiniPlayerPlaylistState()
     
     if (wasPlayingRemoved) {
       if (_playlistManager.playlist.value.isNotEmpty()) {
