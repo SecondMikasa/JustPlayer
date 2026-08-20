@@ -1,10 +1,10 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch: # Allows you to run this manually from the Actions tab
+  workflow_dispatch:
   push:
     tags:
-      - 'v*' # Automatically runs when you push a tag like v1.0.0
+      - 'v*'
 
 jobs:
   build:
@@ -20,13 +20,20 @@ jobs:
           java-version: '17'
 
       - name: Grant execute permission to gradlew
-        run: chmod +x gradlew
+        run: chmod +x ./gradlew
 
       - name: Build Debug APK (No signing required)
-        run: ./gradlew assembleDebug
+        run: ./gradlew clean assembleDebug --no-daemon --stacktrace
+
+      - name: Show build outputs (debug)
+        run: |
+          echo "Listing app/build/outputs:"
+          ls -R app/build/outputs || true
+          echo "Find any APKs:"
+          find app/build -type f -name "*.apk" -print || true
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
         with:
           name: JustPlayer-App
-          path: app/build/outputs/apk/debug/app-debug.apk
+          path: app/build/outputs/**/*.apk
