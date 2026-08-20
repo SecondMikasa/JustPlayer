@@ -1,4 +1,4 @@
-# mpvRex
+# JustPlayer
 
 <p align="center">
   <img src="app/src/main/ic_launcher-playstore.png" width="128" height="128" />
@@ -12,11 +12,11 @@
   <img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" />
   <img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg" />
   <img src="https://img.shields.io/badge/Kotlin-2.3.10-purple.svg" />
-  <a href="https://github.com/sfsakhawat999/mpvRex/releases"><img src="https://img.shields.io/github/downloads/sfsakhawat999/mpvRex/total?logo=Github"/></a>
-  <img src="https://img.shields.io/github/stars/sfsakhawat999/mpvRex?style=flat&logo=github" />
+  <a href="https://github.com/sfsakhawat999/JustPlayer/releases"><img src="https://img.shields.io/github/downloads/sfsakhawat999/JustPlayer/total?logo=Github"/></a>
+  <img src="https://img.shields.io/github/stars/sfsakhawat999/JustPlayer?style=flat&logo=github" />
 </p>
 
-mpvRex is an advanced, customizable video player for Android. It combines the versatility of libmpv with a modern Jetpack Compose interface and unique user-centric features.
+JustPlayer is an advanced, customizable video player for Android. It combines the versatility of libmpv with a modern Jetpack Compose interface and unique user-centric features.
 
 ---
 
@@ -94,10 +94,10 @@ mpvRex is an advanced, customizable video player for Android. It combines the ve
 ## Installation
 
 <div align="center">
-  <a href="https://github.com/sfsakhawat999/mpvRex/releases">
+  <a href="https://github.com/sfsakhawat999/JustPlayer/releases">
     <img src="https://img.shields.io/badge/Download-Stable_Release-blue?style=for-the-badge&logo=github" alt="Stable Release">
   </a>
-  <a href="https://sfsakhawat999.github.io/mpvRex">
+  <a href="https://sfsakhawat999.github.io/JustPlayer">
     <img src="https://img.shields.io/badge/Download-Preview_Build-orange?style=for-the-badge&logo=github" alt="Preview Release">
   </a>
 </div>
@@ -108,7 +108,7 @@ mpvRex is an advanced, customizable video player for Android. It combines the ve
 
 ## Credits
 
-mpvRex has its roots in **[mpvEx](https://github.com/marlboro-advance/mpvEx)**, which itself builds on **[mpv-android](https://github.com/mpv-android/mpv-android)**. We're grateful for the foundation they laid.
+JustPlayer has its roots in **[mpvEx](https://github.com/marlboro-advance/mpvEx)**, which itself builds on **[mpv-android](https://github.com/mpv-android/mpv-android)**. We're grateful for the foundation they laid.
 
 Additional inspiration and reference:
 [mpvKt](https://github.com/abdallahmehiz/mpvKt) · [Next Player](https://github.com/anilbeesetti/nextplayer) · [Gramophone](https://github.com/FoedusProgramme/Gramophone)

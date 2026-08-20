@@ -244,7 +244,7 @@ private fun NormalTopBar(
           )
         }
 
-      val isAppTitleHeader = isHomeScreen || title == stringResource(R.string.app_name) || title == "mpvRex"
+      val isAppTitleHeader = isHomeScreen || title == stringResource(R.string.app_name) || title == "JustPlayer"
       var showNewName by remember { mutableStateOf(false) }
 
       if (isAppTitleHeader) {
@@ -256,7 +256,7 @@ private fun NormalTopBar(
         }
       }
 
-      val displayTitle = if (isAppTitleHeader && showNewName) "REX Player" else title
+      val displayTitle = if (isAppTitleHeader && showNewName) "JustPlayer" else title
 
       AnimatedContent(
         targetState = displayTitle,

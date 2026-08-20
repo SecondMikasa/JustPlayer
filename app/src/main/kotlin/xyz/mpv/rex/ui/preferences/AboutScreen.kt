@@ -206,7 +206,7 @@ object AboutScreen : Screen {
 
                 Column(modifier = Modifier.weight(1f)) {
                   Text(
-                    text = "mpvRex",
+                    text = "JustPlayer",
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     color = cs.onPrimaryContainer,

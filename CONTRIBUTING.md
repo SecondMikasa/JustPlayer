@@ -1,6 +1,6 @@
 Looking to report an issue/bug or make a feature request? Please refer to the [README](README.md) file.
 
-Thanks for your interest in contributing to mpvRex!
+Thanks for your interest in contributing to JustPlayer!
 
 This guide outlines our development practices, code guidelines, and git workflow.
 

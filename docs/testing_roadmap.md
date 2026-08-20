@@ -1,6 +1,6 @@
-# Testing & Quality Assurance Roadmap — mpvRex
+# Testing & Quality Assurance Roadmap — JustPlayer
 
-This document outlines the phased roadmap for integrating an automated testing, code quality, and QA gauntlet into **mpvRex**, following modern Android best practices and software engineering principles.
+This document outlines the phased roadmap for integrating an automated testing, code quality, and QA gauntlet into **JustPlayer**, following modern Android best practices and software engineering principles.
 
 ---
 
