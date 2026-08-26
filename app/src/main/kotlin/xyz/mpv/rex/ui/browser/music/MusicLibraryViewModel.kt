@@ -12,6 +12,7 @@ import xyz.mpv.rex.domain.media.model.MusicSortField
 import xyz.mpv.rex.domain.media.model.MusicSortOrder
 import xyz.mpv.rex.domain.media.model.MusicTab
 import xyz.mpv.rex.domain.media.model.Video
+import xyz.mpv.rex.domain.media.model.VideoFolder
 import xyz.mpv.rex.ui.browser.base.BaseBrowserViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -99,7 +100,15 @@ class MusicLibraryViewModel(
             year = songsInAlbum.maxOf { it.year },
           )
         }
-        .sortedBy { it.title.lowercase() }
+    }.combine(sortField) { alb, field ->
+      when (field) {
+        MusicSortField.TITLE -> alb.sortedBy { it.title.lowercase() }
+        MusicSortField.ARTIST -> alb.sortedBy { it.artist.lowercase() }
+        MusicSortField.YEAR -> alb.sortedBy { it.year }
+        else -> alb.sortedBy { it.title.lowercase() }
+      }
+    }.combine(sortOrder) { alb, order ->
+      if (order == MusicSortOrder.DESCENDING) alb.reversed() else alb
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
   /** Artists derived from the currently loaded songs. */
@@ -118,7 +127,45 @@ class MusicLibraryViewModel(
             albumCount = songsByArtist.map { it.albumKey() }.distinct().size,
           )
         }
-        .sortedBy { it.name.lowercase() }
+    }.combine(sortField) { arts, field ->
+      // Mostly sorting by artist name, unless song count makes sense
+      when (field) {
+        MusicSortField.DURATION -> arts.sortedBy { it.songCount }
+        else -> arts.sortedBy { it.name.lowercase() }
+      }
+    }.combine(sortOrder) { arts, order ->
+      if (order == MusicSortOrder.DESCENDING) arts.reversed() else arts
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+  val folders: StateFlow<List<VideoFolder>> =
+    songs.combine(searchQuery) { allSongs, query ->
+      val filtered = if (query.isBlank()) {
+        allSongs
+      } else {
+        allSongs.filter { java.io.File(it.path).parent?.contains(query, ignoreCase = true) == true }
+      }
+      filtered.groupBy { java.io.File(it.path).parent ?: "" }
+        .filterKeys { it.isNotBlank() }
+        .map { (folderPath, songsInFolder) ->
+          VideoFolder(
+            bucketId = folderPath.hashCode().toString(),
+            name = java.io.File(folderPath).name,
+            path = folderPath,
+            videoCount = songsInFolder.size,
+            totalSize = songsInFolder.sumOf { it.size },
+            totalDuration = songsInFolder.sumOf { it.duration },
+            lastModified = songsInFolder.maxOf { it.dateModified }
+          )
+        }
+    }.combine(sortField) { flds, field ->
+      when (field) {
+        MusicSortField.TITLE -> flds.sortedBy { it.name.lowercase() }
+        MusicSortField.DURATION -> flds.sortedBy { it.totalDuration }
+        MusicSortField.DATE_ADDED -> flds.sortedBy { it.lastModified }
+        else -> flds.sortedBy { it.name.lowercase() }
+      }
+    }.combine(sortOrder) { flds, order ->
+      if (order == MusicSortOrder.DESCENDING) flds.reversed() else flds
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
   private val tag = "MusicLibraryViewModel"
@@ -188,6 +235,9 @@ class MusicLibraryViewModel(
 
   fun songsForArtist(artistName: String): List<Video> =
     songs.value.filter { it.artistKey() == artistName }
+
+  fun songsForFolder(folderPath: String): List<Video> =
+    songs.value.filter { java.io.File(it.path).parent == folderPath }
 
   companion object {
     fun factory(application: Application) = object : ViewModelProvider.Factory {

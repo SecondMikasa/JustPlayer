@@ -967,12 +967,8 @@ class PlayerViewModel(
 
   fun hideControls() {
     try {
-      if (playerPreferences.showSystemStatusBar.get()) {
-        host.windowInsetsController.hide(WindowInsetsCompat.Type.statusBars())
-      }
-      if (playerPreferences.showSystemNavigationBar.get()) {
-        host.windowInsetsController.hide(WindowInsetsCompat.Type.navigationBars())
-      }
+      host.windowInsetsController.hide(WindowInsetsCompat.Type.statusBars())
+      host.windowInsetsController.hide(WindowInsetsCompat.Type.navigationBars())
     } catch (e: Exception) {
       Log.e(TAG, "Failed to hide system bars", e)
     }
@@ -982,12 +978,8 @@ class PlayerViewModel(
 
   fun autoHideControls() {
     try {
-      if (playerPreferences.showSystemStatusBar.get()) {
-        host.windowInsetsController.hide(WindowInsetsCompat.Type.statusBars())
-      }
-      if (playerPreferences.showSystemNavigationBar.get()) {
-        host.windowInsetsController.hide(WindowInsetsCompat.Type.navigationBars())
-      }
+      host.windowInsetsController.hide(WindowInsetsCompat.Type.statusBars())
+      host.windowInsetsController.hide(WindowInsetsCompat.Type.navigationBars())
     } catch (e: Exception) {
       Log.e(TAG, "Failed to hide system bars", e)
     }

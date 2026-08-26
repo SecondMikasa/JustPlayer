@@ -75,6 +75,7 @@ fun VideoCard(
   onThumbClick: (() -> Unit)? = null,
   isGridMode: Boolean = false,
   gridColumns: Int = 1,
+  thumbnailSize: androidx.compose.ui.unit.Dp? = null,
   showSubtitleIndicator: Boolean = true,
   useFolderNameStyle: Boolean = false,
   allowThumbnailGeneration: Boolean = true,
@@ -83,7 +84,7 @@ fun VideoCard(
   
   val thumbnailRepository = koinInject<ThumbnailRepository>()
   val configuration = androidx.compose.ui.platform.LocalConfiguration.current
-  val thumbWidthDp = if (isGridMode) {
+  val thumbWidthDp = thumbnailSize ?: if (isGridMode) {
     if (gridColumns == 1) configuration.screenWidthDp.dp else 180.dp
   } else 128.dp
   val aspect = 16f / 9f

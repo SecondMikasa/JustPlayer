@@ -12,7 +12,6 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -155,9 +154,7 @@ fun <T> UnifiedExplorerContent(
         }
       }.toSet()
       val overallLastPlayed = pathsInItems.filter { it in recentlyPlayedFilePaths }.toSet()
-      if (overallLastPlayed.isNotEmpty()) {
-        overallLastPlayed
-      } else {
+      overallLastPlayed.ifEmpty {
         val fallbackPath = recentlyPlayedPaths.firstOrNull { it in pathsInItems }
         if (fallbackPath != null) setOf(fallbackPath) else emptySet()
       }
@@ -301,8 +298,6 @@ fun <T> UnifiedExplorerContent(
                       }
                       val effectiveOnThumbClick = if (onThumbClick != null) {
                         { onThumbClick(item) }
-                      } else if (tapThumbnailToSelect && mediaLayoutMode != MediaLayoutMode.GRID && !isInSelectionMode) {
-                        { onToggleSelection(item) }
                       } else {
                         null
                       }
@@ -317,8 +312,6 @@ fun <T> UnifiedExplorerContent(
                         onClick = effectiveOnClick,
                         onLongClick = { onLongClick(item) },
                         onThumbClick = effectiveOnThumbClick,
-                        recentlyPlayedFilePath = recentlyPlayedFilePath,
-                        recentlyPlayedPaths = recentlyPlayedPaths,
                         playedFolderPaths = playedFolderPaths,
                         newVideoIds = newVideoIds,
                         watchedVideoIds = watchedVideoIds,
@@ -348,7 +341,7 @@ fun <T> UnifiedExplorerContent(
                 }
                 val effectiveOnThumbClick = if (onThumbClick != null) {
                   { onThumbClick(item) }
-                } else if (tapThumbnailToSelect && mediaLayoutMode != MediaLayoutMode.GRID && !isInSelectionMode) {
+                } else if (tapThumbnailToSelect && !isInSelectionMode) {
                   { onToggleSelection(item) }
                 } else {
                   null
@@ -364,8 +357,6 @@ fun <T> UnifiedExplorerContent(
                   onClick = effectiveOnClick,
                   onLongClick = { onLongClick(item) },
                   onThumbClick = effectiveOnThumbClick,
-                  recentlyPlayedFilePath = recentlyPlayedFilePath,
-                  recentlyPlayedPaths = recentlyPlayedPaths,
                   playedFolderPaths = playedFolderPaths,
                   newVideoIds = newVideoIds,
                   watchedVideoIds = watchedVideoIds,
@@ -410,8 +401,6 @@ fun <T> UnifiedExplorerContent(
                       }
                       val effectiveOnThumbClick = if (onThumbClick != null) {
                         { onThumbClick(item) }
-                      } else if (tapThumbnailToSelect && mediaLayoutMode != MediaLayoutMode.GRID && !isInSelectionMode) {
-                        { onToggleSelection(item) }
                       } else {
                         null
                       }
@@ -426,8 +415,6 @@ fun <T> UnifiedExplorerContent(
                         onClick = effectiveOnClick,
                         onLongClick = { onLongClick(item) },
                         onThumbClick = effectiveOnThumbClick,
-                        recentlyPlayedFilePath = recentlyPlayedFilePath,
-                        recentlyPlayedPaths = recentlyPlayedPaths,
                         playedFolderPaths = playedFolderPaths,
                         newVideoIds = newVideoIds,
                         watchedVideoIds = watchedVideoIds,
@@ -457,7 +444,7 @@ fun <T> UnifiedExplorerContent(
                 }
                 val effectiveOnThumbClick = if (onThumbClick != null) {
                   { onThumbClick(item) }
-                } else if (tapThumbnailToSelect && mediaLayoutMode != MediaLayoutMode.GRID && !isInSelectionMode) {
+                } else if (tapThumbnailToSelect && !isInSelectionMode) {
                   { onToggleSelection(item) }
                 } else {
                   null
@@ -473,8 +460,6 @@ fun <T> UnifiedExplorerContent(
                   onClick = effectiveOnClick,
                   onLongClick = { onLongClick(item) },
                   onThumbClick = effectiveOnThumbClick,
-                  recentlyPlayedFilePath = recentlyPlayedFilePath,
-                  recentlyPlayedPaths = recentlyPlayedPaths,
                   playedFolderPaths = playedFolderPaths,
                   newVideoIds = newVideoIds,
                   watchedVideoIds = watchedVideoIds,
@@ -512,8 +497,6 @@ fun <T> UnifiedExplorerContent(
             }
             val effectiveOnThumbClick = if (onThumbClick != null) {
               { onThumbClick(item) }
-            } else if (tapThumbnailToSelect && mediaLayoutMode != MediaLayoutMode.GRID && !isInSelectionMode) {
-              { onToggleSelection(item) }
             } else {
               null
             }
@@ -528,8 +511,6 @@ fun <T> UnifiedExplorerContent(
               onClick = effectiveOnClick,
               onLongClick = { onLongClick(item) },
               onThumbClick = effectiveOnThumbClick,
-              recentlyPlayedFilePath = recentlyPlayedFilePath,
-              recentlyPlayedPaths = recentlyPlayedPaths,
               playedFolderPaths = playedFolderPaths,
               newVideoIds = newVideoIds,
               watchedVideoIds = watchedVideoIds,
@@ -569,7 +550,7 @@ fun <T> UnifiedExplorerContent(
             }
             val effectiveOnThumbClick = if (onThumbClick != null) {
               { onThumbClick(item) }
-            } else if (tapThumbnailToSelect && mediaLayoutMode != MediaLayoutMode.GRID && !isInSelectionMode) {
+            } else if (tapThumbnailToSelect && !isInSelectionMode) {
               { onToggleSelection(item) }
             } else {
               null
@@ -592,8 +573,6 @@ fun <T> UnifiedExplorerContent(
                       onClick = effectiveOnClick,
                       onLongClick = { onLongClick(item) },
                       onThumbClick = effectiveOnThumbClick,
-                      recentlyPlayedFilePath = recentlyPlayedFilePath,
-                      recentlyPlayedPaths = recentlyPlayedPaths,
                       playedFolderPaths = playedFolderPaths,
                       newVideoIds = newVideoIds,
                       watchedVideoIds = watchedVideoIds,
@@ -616,7 +595,7 @@ fun <T> UnifiedExplorerContent(
                 }
               }
             } else {
-              ExplorerItemCard(
+            ExplorerItemCard(
                 item = item,
                 isSelected = isSelected(item),
                 showSubtitleIndicator = showSubtitleIndicator,
@@ -626,8 +605,6 @@ fun <T> UnifiedExplorerContent(
                 onClick = effectiveOnClick,
                 onLongClick = { onLongClick(item) },
                 onThumbClick = effectiveOnThumbClick,
-                recentlyPlayedFilePath = recentlyPlayedFilePath,
-                recentlyPlayedPaths = recentlyPlayedPaths,
                 playedFolderPaths = playedFolderPaths,
                 newVideoIds = newVideoIds,
                 watchedVideoIds = watchedVideoIds,
@@ -722,8 +699,6 @@ private fun <T> ExplorerItemCard(
   onClick: () -> Unit,
   onLongClick: () -> Unit,
   onThumbClick: (() -> Unit)? = null,
-  recentlyPlayedFilePath: String? = null,
-  recentlyPlayedPaths: Set<String> = emptySet(),
   playedFolderPaths: Set<String> = emptySet(),
   newVideoIds: Set<Long> = emptySet(),
   watchedVideoIds: Set<Long> = emptySet(),

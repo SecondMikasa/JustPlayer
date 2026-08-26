@@ -12,6 +12,7 @@ enum class MusicTab(val title: String) {
   SONGS("Songs"),
   ALBUMS("Albums"),
   ARTISTS("Artists"),
+  FOLDERS("Folders"),
   PLAYLISTS("Playlists"),
 }
 

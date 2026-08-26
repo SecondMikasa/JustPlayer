@@ -6,40 +6,17 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ViewList
-import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Title
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Slider
-import androidx.compose.material3.SliderDefaults
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.ripple
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -86,16 +63,16 @@ fun MusicSortViewOptionsDialog(
       SortFieldItem(MusicSortField.ARTIST, "Artist", Icons.Filled.Mic),
       SortFieldItem(MusicSortField.ALBUM, "Album", Icons.Filled.MusicNote),
       SortFieldItem(MusicSortField.DURATION, "Duration", Icons.Filled.AccessTime),
-      SortFieldItem(MusicSortField.DATE_ADDED, "Date Added", Icons.Filled.CalendarToday),
+      SortFieldItem(MusicSortField.DATE_ADDED, "Date", Icons.Filled.CalendarToday),
     )
   }
 
   AlertDialog(
     onDismissRequest = onDismiss,
-    properties = DialogProperties(usePlatformDefaultWidth = true),
-    shape = RoundedCornerShape(28.dp),
-    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-    modifier = modifier,
+    properties = DialogProperties(usePlatformDefaultWidth = false),
+    shape = RoundedCornerShape(32.dp),
+    containerColor = MaterialTheme.colorScheme.surface,
+    modifier = modifier.padding(24.dp),
     text = {
       Column(
         modifier = Modifier
@@ -105,49 +82,52 @@ fun MusicSortViewOptionsDialog(
         // Title
         Text(
           text = "Sort & View Options",
-          style = MaterialTheme.typography.titleLarge,
-          fontWeight = FontWeight.Bold,
+          style = MaterialTheme.typography.headlineSmall,
+          fontWeight = FontWeight.ExtraBold,
           color = MaterialTheme.colorScheme.onSurface,
+          modifier = Modifier.padding(bottom = 8.dp)
         )
 
         HorizontalDivider(
-          modifier = Modifier.padding(vertical = 12.dp),
-          color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+          modifier = Modifier.padding(vertical = 16.dp),
+          color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f),
         )
 
         // ── 1. Sort by ────────────────────────────────────────────────────────
         Text(
           text = "Sort by",
-          style = MaterialTheme.typography.titleSmall,
-          fontWeight = FontWeight.SemiBold,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          style = MaterialTheme.typography.titleMedium,
+          fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.primary,
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Sort Field Items Row
+        // Sort Field Items Row - Scrollable for better fit
         Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.SpaceBetween,
+          modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
+          horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
           sortFields.forEach { item ->
             val isSelected = selectedSortField == item.field
 
             val animatedCardColor by animateColorAsState(
-              targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.6f),
-              animationSpec = tween(200),
+              targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+              animationSpec = tween(300),
               label = "sort_card_bg",
             )
             val animatedIconColor by animateColorAsState(
               targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-              animationSpec = tween(200),
+              animationSpec = tween(300),
               label = "sort_card_icon",
             )
 
             Column(
               horizontalAlignment = Alignment.CenterHorizontally,
               modifier = Modifier
-                .width(56.dp)
+                .width(64.dp)
                 .clickable(
                   interactionSource = remember { MutableInteractionSource() },
                   indication = null,
@@ -156,8 +136,8 @@ fun MusicSortViewOptionsDialog(
             ) {
               Box(
                 modifier = Modifier
-                  .size(54.dp)
-                  .clip(RoundedCornerShape(16.dp))
+                  .size(60.dp)
+                  .clip(RoundedCornerShape(20.dp))
                   .background(animatedCardColor),
                 contentAlignment = Alignment.Center,
               ) {
@@ -165,16 +145,16 @@ fun MusicSortViewOptionsDialog(
                   imageVector = item.icon,
                   contentDescription = item.label,
                   tint = animatedIconColor,
-                  modifier = Modifier.size(24.dp),
+                  modifier = Modifier.size(28.dp),
                 )
               }
 
-              Spacer(modifier = Modifier.height(4.dp))
+              Spacer(modifier = Modifier.height(8.dp))
 
               Text(
                 text = item.label,
                 style = MaterialTheme.typography.labelSmall,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
                 color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -184,15 +164,17 @@ fun MusicSortViewOptionsDialog(
           }
         }
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(24.dp))
 
-        // Sort Order Segmented Pill (^ A-Z / v Z-A)
+        // Sort Order Segmented Pill
         Row(
           modifier = Modifier
             .fillMaxWidth()
+            .height(48.dp)
             .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .border(
-              BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+              BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
               RoundedCornerShape(24.dp),
             ),
         ) {
@@ -201,41 +183,25 @@ fun MusicSortViewOptionsDialog(
           Box(
             modifier = Modifier
               .weight(1f)
-              .clip(RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp))
-              .then(
-                if (isAscending) {
-                  Modifier
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                    .border(
-                      BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
-                      RoundedCornerShape(24.dp),
-                    )
-                } else Modifier
-              )
-              .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = true),
-                onClick = { onSortOrderChange(MusicSortOrder.ASCENDING) },
-              )
-              .padding(vertical = 10.dp),
+              .fillMaxHeight()
+              .clip(RoundedCornerShape(24.dp))
+              .background(if (isAscending) MaterialTheme.colorScheme.primary else Color.Transparent)
+              .clickable { onSortOrderChange(MusicSortOrder.ASCENDING) },
             contentAlignment = Alignment.Center,
           ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.Center,
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
               Icon(
-                imageVector = Icons.Filled.KeyboardArrowUp,
+                Icons.Filled.KeyboardArrowUp,
                 contentDescription = null,
-                tint = if (isAscending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
+                tint = if (isAscending) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
               )
-              Spacer(modifier = Modifier.width(4.dp))
+              Spacer(Modifier.width(6.dp))
               Text(
-                text = "A-Z",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isAscending) FontWeight.Bold else FontWeight.Medium,
-                color = if (isAscending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                "A-Z",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (isAscending) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
           }
@@ -245,65 +211,50 @@ fun MusicSortViewOptionsDialog(
           Box(
             modifier = Modifier
               .weight(1f)
-              .clip(RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp))
-              .then(
-                if (isDescending) {
-                  Modifier
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                    .border(
-                      BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
-                      RoundedCornerShape(24.dp),
-                    )
-                } else Modifier
-              )
-              .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = true),
-                onClick = { onSortOrderChange(MusicSortOrder.DESCENDING) },
-              )
-              .padding(vertical = 10.dp),
+              .fillMaxHeight()
+              .clip(RoundedCornerShape(24.dp))
+              .background(if (isDescending) MaterialTheme.colorScheme.primary else Color.Transparent)
+              .clickable { onSortOrderChange(MusicSortOrder.DESCENDING) },
             contentAlignment = Alignment.Center,
           ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.Center,
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
               Icon(
-                imageVector = Icons.Filled.KeyboardArrowDown,
+                Icons.Filled.KeyboardArrowDown,
                 contentDescription = null,
-                tint = if (isDescending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
+                tint = if (isDescending) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
               )
-              Spacer(modifier = Modifier.width(4.dp))
+              Spacer(Modifier.width(6.dp))
               Text(
-                text = "Z-A",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isDescending) FontWeight.Bold else FontWeight.Medium,
-                color = if (isDescending) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                "Z-A",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (isDescending) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
           }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
-        // ── 2. Layout ─────────────────────────────────────────────────────────
+        // ── 2. View Layout ──────────────────────────────────────────────────
         Text(
-          text = "Layout",
-          style = MaterialTheme.typography.titleSmall,
-          fontWeight = FontWeight.SemiBold,
-          color = MaterialTheme.colorScheme.onSurfaceVariant,
+          text = "View Layout",
+          style = MaterialTheme.typography.titleMedium,
+          fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.primary,
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // Layout Mode Segmented Pill (List / Grid)
         Row(
           modifier = Modifier
             .fillMaxWidth()
+            .height(48.dp)
             .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
             .border(
-              BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+              BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
               RoundedCornerShape(24.dp),
             ),
         ) {
@@ -312,41 +263,25 @@ fun MusicSortViewOptionsDialog(
           Box(
             modifier = Modifier
               .weight(1f)
-              .clip(RoundedCornerShape(topStart = 24.dp, bottomStart = 24.dp))
-              .then(
-                if (isList) {
-                  Modifier
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                    .border(
-                      BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
-                      RoundedCornerShape(24.dp),
-                    )
-                } else Modifier
-              )
-              .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = true),
-                onClick = { onLayoutModeChange(MediaLayoutMode.LIST) },
-              )
-              .padding(vertical = 10.dp),
+              .fillMaxHeight()
+              .clip(RoundedCornerShape(24.dp))
+              .background(if (isList) MaterialTheme.colorScheme.primary else Color.Transparent)
+              .clickable { onLayoutModeChange(MediaLayoutMode.LIST) },
             contentAlignment = Alignment.Center,
           ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.Center,
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
               Icon(
-                imageVector = Icons.AutoMirrored.Filled.ViewList,
+                Icons.AutoMirrored.Filled.ViewList,
                 contentDescription = null,
-                tint = if (isList) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
+                tint = if (isList) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
               )
-              Spacer(modifier = Modifier.width(6.dp))
+              Spacer(Modifier.width(8.dp))
               Text(
-                text = "List",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isList) FontWeight.Bold else FontWeight.Medium,
-                color = if (isList) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                "List",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (isList) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
           }
@@ -356,47 +291,31 @@ fun MusicSortViewOptionsDialog(
           Box(
             modifier = Modifier
               .weight(1f)
-              .clip(RoundedCornerShape(topEnd = 24.dp, bottomEnd = 24.dp))
-              .then(
-                if (isGrid) {
-                  Modifier
-                    .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
-                    .border(
-                      BorderStroke(1.5.dp, MaterialTheme.colorScheme.primary),
-                      RoundedCornerShape(24.dp),
-                    )
-                } else Modifier
-              )
-              .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = ripple(bounded = true),
-                onClick = { onLayoutModeChange(MediaLayoutMode.GRID) },
-              )
-              .padding(vertical = 10.dp),
+              .fillMaxHeight()
+              .clip(RoundedCornerShape(24.dp))
+              .background(if (isGrid) MaterialTheme.colorScheme.primary else Color.Transparent)
+              .clickable { onLayoutModeChange(MediaLayoutMode.GRID) },
             contentAlignment = Alignment.Center,
           ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              horizontalArrangement = Arrangement.Center,
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
               Icon(
-                imageVector = Icons.Filled.GridView,
+                Icons.Filled.GridView,
                 contentDescription = null,
-                tint = if (isGrid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp),
+                tint = if (isGrid) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(20.dp)
               )
-              Spacer(modifier = Modifier.width(6.dp))
+              Spacer(Modifier.width(8.dp))
               Text(
-                text = "Grid",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = if (isGrid) FontWeight.Bold else FontWeight.Medium,
-                color = if (isGrid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                "Grid",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (isGrid) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
               )
             }
           }
         }
 
-        Spacer(modifier = Modifier.height(18.dp))
+        Spacer(modifier = Modifier.height(32.dp))
 
         // ── 3. Cover Art Size ─────────────────────────────────────────────────
         Row(
@@ -405,55 +324,52 @@ fun MusicSortViewOptionsDialog(
           verticalAlignment = Alignment.CenterVertically,
         ) {
           Text(
-            text = "Cover Art Size",
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-          )
-          Text(
-            text = "$coverArtSize dp",
-            style = MaterialTheme.typography.bodyMedium,
+            text = "Art Cover Size",
+            style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
           )
+          Surface(
+            color = MaterialTheme.colorScheme.primaryContainer,
+            shape = CircleShape,
+          ) {
+            Text(
+              text = "$coverArtSize dp",
+              style = MaterialTheme.typography.labelLarge,
+              fontWeight = FontWeight.ExtraBold,
+              color = MaterialTheme.colorScheme.onPrimaryContainer,
+              modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
+            )
+          }
         }
 
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         Slider(
           value = coverArtSize.toFloat(),
           onValueChange = { onCoverArtSizeChange(it.roundToInt()) },
-          valueRange = 40f..96f,
-          steps = 13,
+          valueRange = 40f..120f,
+          steps = 15,
           colors = SliderDefaults.colors(
             thumbColor = MaterialTheme.colorScheme.primary,
             activeTrackColor = MaterialTheme.colorScheme.primary,
-            inactiveTrackColor = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f),
+            inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
           ),
           modifier = Modifier.fillMaxWidth(),
         )
 
-        Spacer(modifier = Modifier.height(8.dp))
-
-        // ── 4. Done Button ────────────────────────────────────────────────────
-        Row(
-          modifier = Modifier.fillMaxWidth(),
-          horizontalArrangement = Arrangement.End,
-        ) {
-          TextButton(
-            onClick = onDismiss,
-          ) {
-            Text(
-              text = "Done",
-              style = MaterialTheme.typography.labelLarge,
-              fontWeight = FontWeight.Bold,
-              color = MaterialTheme.colorScheme.primary,
-            )
-          }
-        }
+        Spacer(modifier = Modifier.height(24.dp))
       }
     },
-    confirmButton = {},
+    confirmButton = {
+      Button(
+        onClick = onDismiss,
+        shape = RoundedCornerShape(16.dp),
+        contentPadding = PaddingValues(horizontal = 24.dp, vertical = 12.dp)
+      ) {
+        Text("Done", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
+      }
+    },
     dismissButton = {},
   )
 }
