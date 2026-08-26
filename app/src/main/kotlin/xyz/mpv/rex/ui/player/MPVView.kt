@@ -320,6 +320,19 @@ class MPVView(
       "user-data/mpvex/seek_by_with_text" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
       "user-data/mpvex/seek_to_with_text" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
       "user-data/mpvex/software_keyboard" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
+      // Audio properties & metadata — required for AudioPropertiesSheet to refresh
+      // when the current track changes.
+      "path" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
+      "audio-codec-name" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
+      "file-format" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
+      "audio-params/samplerate" to MPVLib.MpvFormat.MPV_FORMAT_INT64,
+      "audio-bitrate" to MPVLib.MpvFormat.MPV_FORMAT_INT64,
+      "audio-params/channels" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
+      "metadata/by-key/title" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
+      "metadata/by-key/artist" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
+      "metadata/by-key/album_artist" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
+      "metadata/by-key/album" to MPVLib.MpvFormat.MPV_FORMAT_STRING,
+      "mute" to MPVLib.MpvFormat.MPV_FORMAT_FLAG,
     )
 
   private fun setupAudioOptions() {

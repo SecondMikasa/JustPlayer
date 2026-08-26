@@ -56,12 +56,41 @@ class BrowserPreferences(
   val includeNoMediaContent = preferenceStore.getBoolean("include_no_media_content", false)
   val showTreeViewPath = preferenceStore.getBoolean("show_tree_view_path", false)
 
-  // Bottom navigation visibility preferences
+  // Bottom navigation visibility and ordering preferences
   val enableTabRecents = preferenceStore.getBoolean("enable_tab_recents", true)
   val enableTabPlaylists = preferenceStore.getBoolean("enable_tab_playlists", true)
   val enableTabNetwork = preferenceStore.getBoolean("enable_tab_network", true)
   val enableTabMusic = preferenceStore.getBoolean("enable_tab_music", true)
+  val bottomNavTabOrder = preferenceStore.getString("bottom_nav_tab_order", DEFAULT_BOTTOM_NAV_TAB_ORDER)
   val playedNetworkLinks = preferenceStore.getString("played_network_links", "")
+
+  // Tablet & large screen layout preferences
+  val enableDualPane = preferenceStore.getBoolean("enable_dual_pane", isTablet)
+
+  // Music library specific preferences
+  val musicSortField = preferenceStore.getEnum("music_sort_field", xyz.mpv.rex.domain.media.model.MusicSortField.TITLE)
+  val musicSortOrder = preferenceStore.getEnum("music_sort_order", xyz.mpv.rex.domain.media.model.MusicSortOrder.ASCENDING)
+  val musicLayoutMode = preferenceStore.getEnum("music_layout_mode", MediaLayoutMode.LIST)
+  val musicCoverArtSize = preferenceStore.getInt("music_cover_art_size", 56)
+
+  companion object {
+    const val TAB_HOME = "home"
+    const val TAB_RECENTS = "recents"
+    const val TAB_PLAYLISTS = "playlists"
+    const val TAB_NETWORK = "network"
+    const val TAB_MUSIC = "music"
+
+    val ALL_BOTTOM_NAV_TABS = listOf(TAB_HOME, TAB_RECENTS, TAB_PLAYLISTS, TAB_NETWORK, TAB_MUSIC)
+    const val DEFAULT_BOTTOM_NAV_TAB_ORDER = "home,recents,playlists,network,music"
+
+    fun parseBottomNavTabOrder(raw: String): List<String> {
+      val parsed = raw.split(",")
+        .map { it.trim() }
+        .filter { it in ALL_BOTTOM_NAV_TABS }
+      val missing = ALL_BOTTOM_NAV_TABS.filter { it !in parsed }
+      return (parsed + missing).distinct()
+    }
+  }
 }
 
 /**

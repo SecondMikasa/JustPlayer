@@ -16,6 +16,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.DisposableEffect
+import android.content.res.Configuration
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -296,336 +298,666 @@ fun AudioPlayerControls(
       )
     }
 
-    Column(
-      modifier = Modifier
-        .fillMaxSize()
-        .statusBarsPadding()
-        .navigationBarsPadding()
-        .padding(horizontal = spacing.large, vertical = spacing.small),
-    ) {
+    val configuration = LocalConfiguration.current
+    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
 
-      // ── Top bar ──────────────────────────────────────────────────────────
+    if (isLandscape) {
       Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        IconButton(onClick = onBackPress) {
-          Icon(
-            imageVector = Icons.Filled.KeyboardArrowDown,
-            contentDescription = "Back",
-            tint = MaterialTheme.colorScheme.onBackground,
-          )
-        }
-        Text(
-          text = "Now Playing",
-          style = MaterialTheme.typography.titleMedium,
-          color = MaterialTheme.colorScheme.onBackground,
-        )
-        IconButton(onClick = { showAudioProperties = true }) {
-          Icon(
-            imageVector = Icons.Filled.Info,
-            contentDescription = "File info",
-            tint = MaterialTheme.colorScheme.onBackground,
-          )
-        }
-      }
-
-      Spacer(modifier = Modifier.weight(1f))
-
-      // ── Cover art / animated wireframe sphere ────────────────────────────
-      Box(
         modifier = Modifier
-          .fillMaxWidth(0.78f)
-          .aspectRatio(1f)
-          .align(Alignment.CenterHorizontally)
-          .clip(if (currentArtwork != null) RoundedCornerShape(16.dp) else CircleShape),
+          .fillMaxSize()
+          .statusBarsPadding()
+          .navigationBarsPadding()
+          .padding(horizontal = spacing.medium, vertical = spacing.extraSmall),
+        verticalAlignment = Alignment.CenterVertically
       ) {
-        if (currentArtwork != null) {
-          AudioCoverArt(currentArtwork)
-        } else if (artworkResolved) {
-          // Only show the wireframe once we've confirmed there is no embedded artwork.
-          // This prevents a one-frame sphere flash when switching back to video mode.
-          WireframeSphere(
-            paused = paused == true,
-            modifier = Modifier.fillMaxSize(),
-          )
-        }
-      }
-
-      Spacer(modifier = Modifier.weight(1f))
-
-      // ── Title / artist ───────────────────────────────────────────────────
-      Text(
-        text = mediaTitle,
-        style = MaterialTheme.typography.headlineSmall,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.onBackground,
-        maxLines = 1,
-        overflow = TextOverflow.Ellipsis,
-      )
-      if (!artist.isNullOrBlank()) {
-        Text(
-          text = artist,
-          style = MaterialTheme.typography.bodyMedium,
-          color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-          maxLines = 1,
-          overflow = TextOverflow.Ellipsis,
-        )
-      }
-
-      Spacer(modifier = Modifier.height(spacing.small))
-
-      // ── Info row: Track N/M · ⏱1.00x · A·B ─────────────────────────────
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween,
-      ) {
-        Row(
-          verticalAlignment = Alignment.CenterVertically,
-          horizontalArrangement = Arrangement.spacedBy(6.dp),
+        // ── Left Side: Album Art / Wireframe Sphere ──
+        Box(
+          modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight(),
+          contentAlignment = Alignment.Center
         ) {
-          if (playlistInfo != null) {
-            Text(
-              text = "Track $playlistInfo",
-              style = MaterialTheme.typography.bodySmall,
-              color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
-            )
-            InfoRowDot()
-          }
-          // Speed chip — tap cycles, long-press opens full speed sheet
-          Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+          Box(
             modifier = Modifier
-              .clip(CircleShape)
-              .combinedClickable(
-                onClick = {
-                  val cur = playbackSpeed ?: 1f
-                  val next = if (cur >= 2f) 0.25f else cur + 0.25f
-                  MPVLib.setPropertyFloat("speed", next.toFixed(2))
-                },
-                onLongClick = { onOpenSheet(Sheets.PlaybackSpeed) },
-              ),
+              .fillMaxHeight(0.85f)
+              .aspectRatio(1f)
+              .clip(if (currentArtwork != null) RoundedCornerShape(20.dp) else CircleShape),
           ) {
-            Row(
-              verticalAlignment = Alignment.CenterVertically,
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            ) {
-              Icon(
-                imageVector = Icons.Filled.Speed,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
-                modifier = Modifier.size(13.dp),
-              )
-              Spacer(modifier = Modifier.width(3.dp))
-              Text(
-                text = "${(playbackSpeed ?: 1f).toFixed(2)}x",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+            if (currentArtwork != null) {
+              AudioCoverArt(currentArtwork)
+            } else if (artworkResolved) {
+              WireframeSphere(
+                paused = paused == true,
+                modifier = Modifier.fillMaxSize(),
               )
             }
           }
-          InfoRowDot()
-          // A-B chip
-          Surface(
-            shape = CircleShape,
-            color = if (abLoopActive)
-              MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.85f)
-            else
-              MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-            modifier = Modifier.clip(CircleShape).clickable { viewModel.toggleABLoopExpanded() },
+        }
+
+        Spacer(modifier = Modifier.width(spacing.medium))
+
+        // ── Right Side: Controls ──
+        Column(
+          modifier = Modifier
+            .weight(1.25f)
+            .fillMaxHeight()
+            .padding(horizontal = spacing.small, vertical = spacing.extraSmall),
+          verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+          // Top bar: Back, Now Playing, Info
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
           ) {
+            IconButton(onClick = onBackPress) {
+              Icon(
+                imageVector = Icons.Filled.KeyboardArrowDown,
+                contentDescription = "Back",
+                tint = MaterialTheme.colorScheme.onBackground,
+              )
+            }
             Text(
-              text = "A·B",
-              style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-              color = if (abLoopActive)
-                MaterialTheme.colorScheme.onTertiaryContainer
-              else
-                MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
-              modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+              text = "Now Playing",
+              style = MaterialTheme.typography.titleMedium,
+              color = MaterialTheme.colorScheme.onBackground,
+            )
+            IconButton(onClick = { showAudioProperties = true }) {
+              Icon(
+                imageVector = Icons.Filled.Info,
+                contentDescription = "File info",
+                tint = MaterialTheme.colorScheme.onBackground,
+              )
+            }
+          }
+
+          // Title & artist
+          Column(modifier = Modifier.fillMaxWidth()) {
+            Text(
+              text = mediaTitle,
+              style = MaterialTheme.typography.headlineSmall,
+              fontWeight = FontWeight.Bold,
+              color = MaterialTheme.colorScheme.onBackground,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+            if (!artist.isNullOrBlank()) {
+              Text(
+                text = artist,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+            }
+          }
+
+          // Info row: Track N/M · ⏱1.00x · A·B  |  Queue
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+              if (playlistInfo != null) {
+                Text(
+                  text = "Track $playlistInfo",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+                )
+                InfoRowDot()
+              }
+              // Speed chip
+              Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier
+                  .clip(CircleShape)
+                  .combinedClickable(
+                    onClick = {
+                      val cur = playbackSpeed ?: 1f
+                      val next = if (cur >= 2f) 0.25f else cur + 0.25f
+                      MPVLib.setPropertyFloat("speed", next.toFixed(2))
+                    },
+                    onLongClick = { onOpenSheet(Sheets.PlaybackSpeed) },
+                  ),
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                ) {
+                  Icon(
+                    imageVector = Icons.Filled.Speed,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                    modifier = Modifier.size(13.dp),
+                  )
+                  Spacer(modifier = Modifier.width(3.dp))
+                  Text(
+                    text = "${(playbackSpeed ?: 1f).toFixed(2)}x",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                  )
+                }
+              }
+              InfoRowDot()
+              // A-B chip
+              Surface(
+                shape = CircleShape,
+                color = if (abLoopActive)
+                  MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.85f)
+                else
+                  MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier.clip(CircleShape).clickable { viewModel.toggleABLoopExpanded() },
+              ) {
+                Text(
+                  text = "A·B",
+                  style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                  color = if (abLoopActive)
+                    MaterialTheme.colorScheme.onTertiaryContainer
+                  else
+                    MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                )
+              }
+            }
+            if (hasPlaylist) {
+              IconButton(
+                onClick = { onOpenSheet(Sheets.Playlist) },
+                modifier = Modifier.size(32.dp),
+              ) {
+                Icon(
+                  imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                  contentDescription = "Open queue",
+                  tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                )
+              }
+            }
+          }
+
+          // Seekbar
+          SeekbarWithTimers(
+            position            = { (position ?: 0).toFloat() },
+            duration            = (duration ?: 0).toFloat(),
+            onValueChange       = { viewModel.seekTo(it.toInt()) },
+            onValueChangeFinished = {},
+            timersInverted      = Pair(false, invertDuration),
+            positionTimerOnClick = {},
+            durationTimerOnCLick = { playerPrefs.invertDuration.set(!invertDuration) },
+            chapters            = persistentListOf(),
+            paused              = paused == true,
+            seekbarStyle        = seekbarStyle,
+          )
+
+          // Transport: |◄  ◄◄  ▶  ▶▶  ►|
+          Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            IconButton(onClick = { viewModel.playPrevious() }, enabled = hasPrevious) {
+              Icon(
+                imageVector = Icons.Filled.SkipPrevious,
+                contentDescription = "Previous",
+                tint = if (hasPrevious) MaterialTheme.colorScheme.onBackground
+                       else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+                modifier = Modifier.size(30.dp),
+              )
+            }
+            Box(
+              modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .combinedClickable(
+                  onClick = { viewModel.seekBy(-customSkipDuration) },
+                  onLongClick = { onOpenSheet(Sheets.CustomSkipDuration) },
+                ),
+              contentAlignment = Alignment.Center,
+            ) {
+              Icon(
+                imageVector = Icons.Filled.FastRewind,
+                contentDescription = "Rewind",
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(28.dp),
+              )
+            }
+            Surface(
+              onClick = { viewModel.pauseUnpause() },
+              shape = CircleShape,
+              color = MaterialTheme.colorScheme.primary,
+              modifier = Modifier.size(58.dp),
+            ) {
+              Box(contentAlignment = Alignment.Center) {
+                Icon(
+                  imageVector = if (paused == true) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                  contentDescription = if (paused == true) "Play" else "Pause",
+                  tint = MaterialTheme.colorScheme.onPrimary,
+                  modifier = Modifier.size(32.dp),
+                )
+              }
+            }
+            Box(
+              modifier = Modifier
+                .size(44.dp)
+                .clip(CircleShape)
+                .combinedClickable(
+                  onClick = { viewModel.seekBy(customSkipDuration) },
+                  onLongClick = { onOpenSheet(Sheets.CustomSkipDuration) },
+                ),
+              contentAlignment = Alignment.Center,
+            ) {
+              Icon(
+                imageVector = Icons.Filled.FastForward,
+                contentDescription = "Forward",
+                tint = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.size(28.dp),
+              )
+            }
+            IconButton(onClick = { viewModel.playNext() }, enabled = hasNext) {
+              Icon(
+                imageVector = Icons.Filled.SkipNext,
+                contentDescription = "Next",
+                tint = if (hasNext) MaterialTheme.colorScheme.onBackground
+                       else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+                modifier = Modifier.size(30.dp),
+              )
+            }
+          }
+
+          // Bottom action bar
+          Row(
+            modifier = Modifier
+              .fillMaxWidth()
+              .clip(RoundedCornerShape(20.dp))
+              .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+              .padding(vertical = 2.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            ActionBarButton(
+              icon = { Icon(Icons.Filled.Tune, null) },
+              active = equalizerState.isEnabled,
+              onClick = { onOpenSheet(Sheets.Equalizer) },
+            )
+            ActionBarButton(
+              icon = {
+                Icon(
+                  if (shuffleEnabled) Icons.Filled.ShuffleOn else Icons.Filled.Shuffle,
+                  null,
+                )
+              },
+              active = shuffleEnabled,
+              onClick = { viewModel.toggleShuffle() },
+            )
+            ActionBarButton(
+              icon = {
+                Icon(
+                  when (repeatMode) {
+                    RepeatMode.OFF -> Icons.Filled.Repeat
+                    RepeatMode.ONE -> Icons.Filled.RepeatOne
+                    RepeatMode.ALL -> Icons.Filled.RepeatOn
+                  },
+                  null,
+                )
+              },
+              active = repeatMode != RepeatMode.OFF,
+              onClick = { viewModel.cycleRepeatMode() },
+            )
+            ActionBarButton(
+              icon = { Icon(Icons.Filled.Timer, null) },
+              active = sleepTimerTimeRemaining > 0,
+              onClick = { onOpenSheet(Sheets.SleepTimer) },
+            )
+            val isMuted by MPVLib.propBoolean["mute"].collectAsState()
+            ActionBarButton(
+              icon = {
+                Icon(
+                  if (isMuted == true) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                  null,
+                )
+              },
+              active = isMuted == true,
+              onClick = { viewModel.toggleMute() },
+              onLongClick = { viewModel.displayVolumeSlider() }
             )
           }
         }
-        // Right side: Open current play queue  (same PlaylistSheet as video player)
-        if (hasPlaylist) {
-          IconButton(
-            onClick = { onOpenSheet(Sheets.Playlist) },
-            modifier = Modifier.size(36.dp),
+      }
+    } else {
+      Column(
+        modifier = Modifier
+          .fillMaxSize()
+          .statusBarsPadding()
+          .navigationBarsPadding()
+          .padding(horizontal = spacing.large, vertical = spacing.small),
+      ) {
+
+        // ── Top bar ──────────────────────────────────────────────────────────
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceBetween,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          IconButton(onClick = onBackPress) {
+            Icon(
+              imageVector = Icons.Filled.KeyboardArrowDown,
+              contentDescription = "Back",
+              tint = MaterialTheme.colorScheme.onBackground,
+            )
+          }
+          Text(
+            text = "Now Playing",
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onBackground,
+          )
+          IconButton(onClick = { showAudioProperties = true }) {
+            Icon(
+              imageVector = Icons.Filled.Info,
+              contentDescription = "File info",
+              tint = MaterialTheme.colorScheme.onBackground,
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        // ── Cover art / animated wireframe sphere ────────────────────────────
+        Box(
+          modifier = Modifier
+            .fillMaxWidth(0.78f)
+            .aspectRatio(1f)
+            .align(Alignment.CenterHorizontally)
+            .clip(if (currentArtwork != null) RoundedCornerShape(16.dp) else CircleShape),
+        ) {
+          if (currentArtwork != null) {
+            AudioCoverArt(currentArtwork)
+          } else if (artworkResolved) {
+            // Only show the wireframe once we've confirmed there is no embedded artwork.
+            // This prevents a one-frame sphere flash when switching back to video mode.
+            WireframeSphere(
+              paused = paused == true,
+              modifier = Modifier.fillMaxSize(),
+            )
+          }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
+
+        // ── Title / artist ───────────────────────────────────────────────────
+        Text(
+          text = mediaTitle,
+          style = MaterialTheme.typography.headlineSmall,
+          fontWeight = FontWeight.Bold,
+          color = MaterialTheme.colorScheme.onBackground,
+          maxLines = 1,
+          overflow = TextOverflow.Ellipsis,
+        )
+        if (!artist.isNullOrBlank()) {
+          Text(
+            text = artist,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+          )
+        }
+
+        Spacer(modifier = Modifier.height(spacing.small))
+
+        // ── Info row: Track N/M · ⏱1.00x · A·B ─────────────────────────────
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+          ) {
+            if (playlistInfo != null) {
+              Text(
+                text = "Track $playlistInfo",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
+              )
+              InfoRowDot()
+            }
+            // Speed chip — tap cycles, long-press opens full speed sheet
+            Surface(
+              shape = CircleShape,
+              color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+              modifier = Modifier
+                .clip(CircleShape)
+                .combinedClickable(
+                  onClick = {
+                    val cur = playbackSpeed ?: 1f
+                    val next = if (cur >= 2f) 0.25f else cur + 0.25f
+                    MPVLib.setPropertyFloat("speed", next.toFixed(2))
+                  },
+                  onLongClick = { onOpenSheet(Sheets.PlaybackSpeed) },
+                ),
+            ) {
+              Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+              ) {
+                Icon(
+                  imageVector = Icons.Filled.Speed,
+                  contentDescription = null,
+                  tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                  modifier = Modifier.size(13.dp),
+                )
+                Spacer(modifier = Modifier.width(3.dp))
+                Text(
+                  text = "${(playbackSpeed ?: 1f).toFixed(2)}x",
+                  style = MaterialTheme.typography.bodySmall,
+                  color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                )
+              }
+            }
+            InfoRowDot()
+            // A-B chip
+            Surface(
+              shape = CircleShape,
+              color = if (abLoopActive)
+                MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.85f)
+              else
+                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+              modifier = Modifier.clip(CircleShape).clickable { viewModel.toggleABLoopExpanded() },
+            ) {
+              Text(
+                text = "A·B",
+                style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.Bold),
+                color = if (abLoopActive)
+                  MaterialTheme.colorScheme.onTertiaryContainer
+                else
+                  MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+              )
+            }
+          }
+          // Right side: Open current play queue  (same PlaylistSheet as video player)
+          if (hasPlaylist) {
+            IconButton(
+              onClick = { onOpenSheet(Sheets.Playlist) },
+              modifier = Modifier.size(36.dp),
+            ) {
+              Icon(
+                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                contentDescription = "Open queue",
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+              )
+            }
+          }
+        }
+
+        Spacer(modifier = Modifier.height(spacing.small))
+
+        // ── Seekbar (same component + settings as video player) ───────────────
+        SeekbarWithTimers(
+          position            = { (position ?: 0).toFloat() },
+          duration            = (duration ?: 0).toFloat(),
+          onValueChange       = { viewModel.seekTo(it.toInt()) },
+          onValueChangeFinished = {},
+          timersInverted      = Pair(false, invertDuration),
+          positionTimerOnClick = {},
+          durationTimerOnCLick = { playerPrefs.invertDuration.set(!invertDuration) },
+          chapters            = persistentListOf(),
+          paused              = paused == true,
+          seekbarStyle        = seekbarStyle,
+        )
+
+        Spacer(modifier = Modifier.height(spacing.small))
+
+        // ── Transport: |◄  ◄◄  ▶  ▶▶  ►| ────────────────────────────────────
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          horizontalArrangement = Arrangement.SpaceEvenly,
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          IconButton(onClick = { viewModel.playPrevious() }, enabled = hasPrevious) {
+            Icon(
+              imageVector = Icons.Filled.SkipPrevious,
+              contentDescription = "Previous",
+              tint = if (hasPrevious) MaterialTheme.colorScheme.onBackground
+                     else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+              modifier = Modifier.size(32.dp),
+            )
+          }
+          // Rewind: single tap seeks back, long-press opens skip-duration picker
+          Box(
+            modifier = Modifier
+              .size(48.dp)
+              .clip(CircleShape)
+              .combinedClickable(
+                onClick = { viewModel.seekBy(-customSkipDuration) },
+                onLongClick = { onOpenSheet(Sheets.CustomSkipDuration) },
+              ),
+            contentAlignment = Alignment.Center,
           ) {
             Icon(
-              imageVector = Icons.AutoMirrored.Filled.QueueMusic,
-              contentDescription = "Open queue",
-              tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+              imageVector = Icons.Filled.FastRewind,
+              contentDescription = "Rewind",
+              tint = MaterialTheme.colorScheme.onBackground,
+              modifier = Modifier.size(30.dp),
+            )
+          }
+          // Large play/pause
+          Surface(
+            onClick = { viewModel.pauseUnpause() },
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(64.dp),
+          ) {
+            Box(contentAlignment = Alignment.Center) {
+              Icon(
+                imageVector = if (paused == true) Icons.Filled.PlayArrow else Icons.Filled.Pause,
+                contentDescription = if (paused == true) "Play" else "Pause",
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(36.dp),
+              )
+            }
+          }
+          // Forward: single tap seeks forward, long-press opens skip-duration picker
+          Box(
+            modifier = Modifier
+              .size(48.dp)
+              .clip(CircleShape)
+              .combinedClickable(
+                onClick = { viewModel.seekBy(customSkipDuration) },
+                onLongClick = { onOpenSheet(Sheets.CustomSkipDuration) },
+              ),
+            contentAlignment = Alignment.Center,
+          ) {
+            Icon(
+              imageVector = Icons.Filled.FastForward,
+              contentDescription = "Forward",
+              tint = MaterialTheme.colorScheme.onBackground,
+              modifier = Modifier.size(30.dp),
+            )
+          }
+          IconButton(onClick = { viewModel.playNext() }, enabled = hasNext) {
+            Icon(
+              imageVector = Icons.Filled.SkipNext,
+              contentDescription = "Next",
+              tint = if (hasNext) MaterialTheme.colorScheme.onBackground
+                     else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
+              modifier = Modifier.size(32.dp),
             )
           }
         }
-      }
 
-      Spacer(modifier = Modifier.height(spacing.small))
+        Spacer(modifier = Modifier.height(spacing.medium))
 
-      // ── Seekbar (same component + settings as video player) ───────────────
-      SeekbarWithTimers(
-        position            = { (position ?: 0).toFloat() },
-        duration            = (duration ?: 0).toFloat(),
-        onValueChange       = { viewModel.seekTo(it.toInt()) },
-        onValueChangeFinished = {},
-        timersInverted      = Pair(false, invertDuration),
-        positionTimerOnClick = {},
-        durationTimerOnCLick = { playerPrefs.invertDuration.set(!invertDuration) },
-        chapters            = persistentListOf(),
-        paused              = paused == true,
-        seekbarStyle        = seekbarStyle,
-      )
-
-      Spacer(modifier = Modifier.height(spacing.small))
-
-      // ── Transport: |◄  ◄◄  ▶  ▶▶  ►| ────────────────────────────────────
-      Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        IconButton(onClick = { viewModel.playPrevious() }, enabled = hasPrevious) {
-          Icon(
-            imageVector = Icons.Filled.SkipPrevious,
-            contentDescription = "Previous",
-            tint = if (hasPrevious) MaterialTheme.colorScheme.onBackground
-                   else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
-            modifier = Modifier.size(32.dp),
-          )
-        }
-        // Rewind: single tap seeks back, long-press opens skip-duration picker
-        Box(
+        // ── Bottom action bar ─────────────────────────────────────────────────
+        Row(
           modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .combinedClickable(
-              onClick = { viewModel.seekBy(-customSkipDuration) },
-              onLongClick = { onOpenSheet(Sheets.CustomSkipDuration) },
-            ),
-          contentAlignment = Alignment.Center,
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(24.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+            .padding(vertical = 4.dp),
+          horizontalArrangement = Arrangement.SpaceEvenly,
+          verticalAlignment = Alignment.CenterVertically,
         ) {
-          Icon(
-            imageVector = Icons.Filled.FastRewind,
-            contentDescription = "Rewind",
-            tint = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.size(30.dp),
+          // Equalizer
+          ActionBarButton(
+            icon = { Icon(Icons.Filled.Tune, null) },
+            active = equalizerState.isEnabled,
+            onClick = { onOpenSheet(Sheets.Equalizer) },
+          )
+          // Shuffle
+          ActionBarButton(
+            icon = {
+              Icon(
+                if (shuffleEnabled) Icons.Filled.ShuffleOn else Icons.Filled.Shuffle,
+                null,
+              )
+            },
+            active = shuffleEnabled,
+            onClick = { viewModel.toggleShuffle() },
+          )
+          // Repeat
+          ActionBarButton(
+            icon = {
+              Icon(
+                when (repeatMode) {
+                  RepeatMode.OFF -> Icons.Filled.Repeat
+                  RepeatMode.ONE -> Icons.Filled.RepeatOne
+                  RepeatMode.ALL -> Icons.Filled.RepeatOn
+                },
+                null,
+              )
+            },
+            active = repeatMode != RepeatMode.OFF,
+            onClick = { viewModel.cycleRepeatMode() },
+          )
+          // Sleep timer
+          ActionBarButton(
+            icon = { Icon(Icons.Filled.Timer, null) },
+            active = sleepTimerTimeRemaining > 0,
+            onClick = { onOpenSheet(Sheets.SleepTimer) },
+          )
+          // Sound / Volume
+          val isMuted by MPVLib.propBoolean["mute"].collectAsState()
+          ActionBarButton(
+            icon = {
+              Icon(
+                if (isMuted == true) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+                null,
+              )
+            },
+            active = isMuted == true,
+            onClick = { viewModel.toggleMute() },
+            onLongClick = { viewModel.displayVolumeSlider() }
           )
         }
-        // Large play/pause
-        Surface(
-          onClick = { viewModel.pauseUnpause() },
-          shape = CircleShape,
-          color = MaterialTheme.colorScheme.primary,
-          modifier = Modifier.size(64.dp),
-        ) {
-          Box(contentAlignment = Alignment.Center) {
-            Icon(
-              imageVector = if (paused == true) Icons.Filled.PlayArrow else Icons.Filled.Pause,
-              contentDescription = if (paused == true) "Play" else "Pause",
-              tint = MaterialTheme.colorScheme.onPrimary,
-              modifier = Modifier.size(36.dp),
-            )
-          }
-        }
-        // Forward: single tap seeks forward, long-press opens skip-duration picker
-        Box(
-          modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .combinedClickable(
-              onClick = { viewModel.seekBy(customSkipDuration) },
-              onLongClick = { onOpenSheet(Sheets.CustomSkipDuration) },
-            ),
-          contentAlignment = Alignment.Center,
-        ) {
-          Icon(
-            imageVector = Icons.Filled.FastForward,
-            contentDescription = "Forward",
-            tint = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.size(30.dp),
-          )
-        }
-        IconButton(onClick = { viewModel.playNext() }, enabled = hasNext) {
-          Icon(
-            imageVector = Icons.Filled.SkipNext,
-            contentDescription = "Next",
-            tint = if (hasNext) MaterialTheme.colorScheme.onBackground
-                   else MaterialTheme.colorScheme.onBackground.copy(alpha = 0.3f),
-            modifier = Modifier.size(32.dp),
-          )
-        }
-      }
 
-      Spacer(modifier = Modifier.height(spacing.medium))
-
-      // ── Bottom action bar ─────────────────────────────────────────────────
-      Row(
-        modifier = Modifier
-          .fillMaxWidth()
-          .clip(RoundedCornerShape(24.dp))
-          .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-          .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceEvenly,
-        verticalAlignment = Alignment.CenterVertically,
-      ) {
-        // Equalizer
-        ActionBarButton(
-          icon = { Icon(Icons.Filled.Tune, null) },
-          active = equalizerState.isEnabled,
-          onClick = { onOpenSheet(Sheets.Equalizer) },
-        )
-        // Shuffle
-        ActionBarButton(
-          icon = {
-            Icon(
-              if (shuffleEnabled) Icons.Filled.ShuffleOn else Icons.Filled.Shuffle,
-              null,
-            )
-          },
-          active = shuffleEnabled,
-          onClick = { viewModel.toggleShuffle() },
-        )
-        // Repeat
-        ActionBarButton(
-          icon = {
-            Icon(
-              when (repeatMode) {
-                RepeatMode.OFF -> Icons.Filled.Repeat
-                RepeatMode.ONE -> Icons.Filled.RepeatOne
-                RepeatMode.ALL -> Icons.Filled.RepeatOn
-              },
-              null,
-            )
-          },
-          active = repeatMode != RepeatMode.OFF,
-          onClick = { viewModel.cycleRepeatMode() },
-        )
-        // Sleep timer
-        ActionBarButton(
-          icon = { Icon(Icons.Filled.Timer, null) },
-          active = sleepTimerTimeRemaining > 0,
-          onClick = { onOpenSheet(Sheets.SleepTimer) },
-        )
-        // Sound / Volume
-        val isMuted by MPVLib.propBoolean["mute"].collectAsState()
-        ActionBarButton(
-          icon = {
-            Icon(
-              if (isMuted == true) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
-              null,
-            )
-          },
-          active = isMuted == true,
-          onClick = { viewModel.toggleMute() },
-          onLongClick = { viewModel.displayVolumeSlider() }
-        )
-      }
-
-      Spacer(modifier = Modifier.height(spacing.small))
-    } // end Column
+        Spacer(modifier = Modifier.height(spacing.small))
+      } // end Column
+    }
 
     // ── Volume Slider ───────────────────────────────────────────────────
     val isVolumeSliderShown by viewModel.isVolumeSliderShown.collectAsState()
@@ -1009,30 +1341,43 @@ private fun AudioPropertiesSheet(
 ) {
   val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-  // Snapshot all MPV properties reactively, keyed on `path` so they automatically
-  // refresh when the track changes. No `initial = remember { ... }` synchronous reads —
-  // those captured stale data from the previous song because MPV metadata arrives
-  // asynchronously after file load and the remember block ran too early.
-  val codec      by MPVLib.propString["audio-codec-name"].collectAsState()
-  val fileFormat by MPVLib.propString["file-format"].collectAsState()
+  // Properties that MPV reliably pushes updates for when the track changes:
   val sampleRate by MPVLib.propInt["audio-params/samplerate"].collectAsState()
   val bitrateRaw by MPVLib.propInt["audio-bitrate"].collectAsState()
   val channels   by MPVLib.propString["audio-params/channels"].collectAsState()
-  val propTitle  by MPVLib.propString["metadata/by-key/title"].collectAsState()
-  val propArtist by MPVLib.propString["metadata/by-key/artist"].collectAsState()
-  val propAlbumArtist by MPVLib.propString["metadata/by-key/album_artist"].collectAsState()
-  val propAlbum  by MPVLib.propString["metadata/by-key/album"].collectAsState()
 
-  // When the path changes (new track), MPV emits updated metadata to the property flows above.
-  // The 150 ms delay lets MPV finish parsing the file's tags before the sheet first renders,
-  // preventing a brief flash of empty/stale values on fast machines.
-  val ready by produceState(initialValue = false, key1 = path) {
-    kotlinx.coroutines.delay(150)
-    value = true
+  // Metadata & codec properties are read directly from MPV via produceState,
+  // keyed on `path`. When a new file loads without certain tags (e.g. no artist),
+  // MPV never emits a property-change event — the old StateFlow value would linger.
+  // Direct reads return null for missing tags, preventing stale data.
+  data class AudioMeta(
+    val codec: String? = null,
+    val fileFormat: String? = null,
+    val title: String? = null,
+    val artist: String? = null,
+    val albumArtist: String? = null,
+    val album: String? = null,
+  )
+
+  val meta by produceState(initialValue = AudioMeta(), key1 = path) {
+    // Wait for MPV to finish parsing the new file's tags
+    kotlinx.coroutines.delay(200)
+    value = AudioMeta(
+      codec       = runCatching { MPVLib.getPropertyString("audio-codec-name") }.getOrNull(),
+      fileFormat  = runCatching { MPVLib.getPropertyString("file-format") }.getOrNull(),
+      title       = runCatching { MPVLib.getPropertyString("metadata/by-key/title") }.getOrNull(),
+      artist      = runCatching { MPVLib.getPropertyString("metadata/by-key/artist") }.getOrNull(),
+      albumArtist = runCatching { MPVLib.getPropertyString("metadata/by-key/album_artist") }.getOrNull(),
+      album       = runCatching { MPVLib.getPropertyString("metadata/by-key/album") }.getOrNull(),
+    )
   }
 
-  val codecStr = if (ready) codec ?: "—" else "—"
-  val formatStr = if (ready) fileFormat
+  // `meta` resets to all-null on path change, then populates after 200ms.
+  // While meta hasn't loaded yet, show placeholders.
+  val ready = meta.codec != null || meta.fileFormat != null || meta.title != null
+
+  val codecStr = if (ready) meta.codec ?: "—" else "—"
+  val formatStr = if (ready) meta.fileFormat
     ?.uppercase(Locale.US)?.split(",")?.firstOrNull() ?: "—" else "—"
   val sampleRateStr = if (ready && sampleRate != null && sampleRate!! > 0)
     "${sampleRate!! / 1000.0} kHz" else "—"
@@ -1045,10 +1390,10 @@ private fun AudioPropertiesSheet(
     channels?.contains("7.1") == true                       -> "Surround (7.1)"
     else -> channels ?: "—"
   } else "—"
-  val titleStr = if (ready) propTitle
+  val titleStr = if (ready) meta.title
     ?: path?.substringAfterLast('/')?.substringBeforeLast('.') ?: "—" else "—"
-  val artistStr = if (ready) propArtist ?: propAlbumArtist ?: "—" else "—"
-  val albumStr  = if (ready) propAlbum ?: "—" else "—"
+  val artistStr = if (ready) meta.artist ?: meta.albumArtist ?: "—" else "—"
+  val albumStr  = if (ready) meta.album ?: "—" else "—"
 
   val fileSizeStr = remember(path) {
     if (path.isNullOrBlank()) return@remember "—"

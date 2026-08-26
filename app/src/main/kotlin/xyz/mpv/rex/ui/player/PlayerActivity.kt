@@ -1915,12 +1915,15 @@ class PlayerActivity :
 
     // Update VM and services with exact loaded duration
     val loadedDurationSec = MPVLib.getPropertyDouble("duration") ?: 0.0
+    // Update duration metadata even if duration is 0 (very short files)
+    val loadedDurationMs = if (loadedDurationSec > 0.0) (loadedDurationSec * 1000).toLong() else 0L
     if (loadedDurationSec > 0.0) {
-      viewModel.onFileLoaded(loadedDurationSec)
-      val loadedDurationMs = (loadedDurationSec * 1000).toLong()
-      miniPlayerStateManager.updateState(durationMs = loadedDurationMs)
-      updateMediaSessionMetadata(title = fileName, durationMs = loadedDurationMs)
+      if (viewModel.externalAudioTracksEmpty()) {
+        viewModel.updateDuration(loadedDurationSec)
+      }
     }
+    miniPlayerStateManager.updateState(durationMs = loadedDurationMs)
+    updateMediaSessionMetadata(title = fileName, durationMs = loadedDurationMs)
 
     // Set the background playback toggle button default based on BackgroundPlaybackMode preference
     val isAudio = isCurrentMediaAudio()
@@ -1964,6 +1967,14 @@ class PlayerActivity :
       // Unpause playback after position and state restoration complete
       runCatching {
         MPVLib.setPropertyBoolean("pause", false)
+      }
+
+      // Now that vid is re-enabled and playback is unpaused, dismiss the loading
+      // overlay. This ordering prevents the brief flash of video content before the
+      // loader has a chance to hide, and avoids the race where the old code dismissed
+      // the loader before the video track was active.
+      withContext(Dispatchers.Main) {
+        viewModel.clearLoadingState(immediate = true)
       }
 
       // Apply track selection logic (defaults only apply when no saved state)

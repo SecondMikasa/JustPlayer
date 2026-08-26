@@ -1,76 +1,83 @@
 package xyz.mpv.rex.ui.browser
 
 import android.annotation.SuppressLint
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.outlined.VideoLibrary
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarDefaults
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.serialization.Serializable
+import org.koin.compose.koinInject
 import xyz.mpv.rex.R
 import xyz.mpv.rex.preferences.BrowserPreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.browser.folderlist.FolderListScreen
+import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayerStateManager
 import xyz.mpv.rex.ui.browser.music.MusicLibraryScreen
 import xyz.mpv.rex.ui.browser.networkstreaming.NetworkStreamingScreen
 import xyz.mpv.rex.ui.browser.playlist.PlaylistScreen
 import xyz.mpv.rex.ui.browser.recentlyplayed.RecentlyPlayedScreen
 import xyz.mpv.rex.ui.browser.selection.SelectionManager
-import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayer
-import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayerStateManager
-import androidx.compose.foundation.layout.Column
-import androidx.compose.runtime.collectAsState
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.serialization.Serializable
-import org.koin.compose.koinInject
 
 @Serializable
 object MainScreen : Screen {
-  // Use a companion object to store state more persistently
+  // Use companion object to store state persistently across recompositions
   private var persistentSelectedTab: Int = 0
+  private var persistentSelectedTabId: String = "home"
   private var persistentPreviousTab: Int = 0
   
   private val _tabRequest = MutableSharedFlow<Int>(extraBufferCapacity = 1)
@@ -122,7 +129,6 @@ object MainScreen : Screen {
     _sharedVideoSelectionManager.value = selectionManager
     
     // Only hide navigation bar when videos are selected AND in selection mode
-    // This fixes the issue where bottom bar disappears when only videos are selected
     _shouldHideNavigationBar.value = isInSelectionMode && isOnlyVideosSelected
   }
   
@@ -149,16 +155,7 @@ object MainScreen : Screen {
   @Composable
   @SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
   override fun Content() {
-    var selectedTab by remember {
-      mutableIntStateOf(persistentSelectedTab)
-    }
-    
-    var previousTab by remember {
-      mutableIntStateOf(persistentPreviousTab)
-    }
-
-    val context = LocalContext.current
-    val density = LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
     val browserPreferences = koinInject<BrowserPreferences>()
     val miniPlayerStateManager = koinInject<MiniPlayerStateManager>()
     val miniPlayerState by miniPlayerStateManager.state.collectAsState()
@@ -166,6 +163,7 @@ object MainScreen : Screen {
     val enableTabPlaylists by browserPreferences.enableTabPlaylists.collectAsState()
     val enableTabNetwork by browserPreferences.enableTabNetwork.collectAsState()
     val enableTabMusic by browserPreferences.enableTabMusic.collectAsState()
+    val bottomNavTabOrderRaw by browserPreferences.bottomNavTabOrder.collectAsState()
 
     val homeLabel = stringResource(R.string.home)
     val recentsLabel = stringResource(R.string.recents)
@@ -173,56 +171,81 @@ object MainScreen : Screen {
     val networkLabel = stringResource(R.string.network)
     val musicLabel = stringResource(R.string.music)
 
+    val tabOrder = remember(bottomNavTabOrderRaw) {
+      BrowserPreferences.parseBottomNavTabOrder(bottomNavTabOrderRaw)
+    }
+
     val visibleTabs = remember(
+      tabOrder,
       enableTabRecents, enableTabPlaylists, enableTabNetwork, enableTabMusic,
       homeLabel, recentsLabel, playlistsLabel, networkLabel, musicLabel
     ) {
       buildList {
-        add(
-          VisibleTab("home", homeLabel, Icons.Filled.Home) {
-            FolderListScreen.Content()
+        for (tabId in tabOrder) {
+          when (tabId) {
+            BrowserPreferences.TAB_HOME -> add(
+              VisibleTab("home", homeLabel, Icons.Filled.Home) {
+                FolderListScreen.Content()
+              }
+            )
+            BrowserPreferences.TAB_RECENTS -> if (enableTabRecents) {
+              add(
+                VisibleTab("recents", recentsLabel, Icons.Filled.History) {
+                  RecentlyPlayedScreen.Content()
+                }
+              )
+            }
+            BrowserPreferences.TAB_PLAYLISTS -> if (enableTabPlaylists) {
+              add(
+                VisibleTab("playlists", playlistsLabel, Icons.AutoMirrored.Filled.PlaylistPlay) {
+                  PlaylistScreen.Content()
+                }
+              )
+            }
+            BrowserPreferences.TAB_NETWORK -> if (enableTabNetwork) {
+              add(
+                VisibleTab("network", networkLabel, Icons.Filled.Language) {
+                  NetworkStreamingScreen.Content()
+                }
+              )
+            }
+            BrowserPreferences.TAB_MUSIC -> if (enableTabMusic) {
+              add(
+                VisibleTab("music", musicLabel, Icons.Filled.LibraryMusic) {
+                  MusicLibraryScreen.Content()
+                }
+              )
+            }
           }
-        )
-        if (enableTabRecents) {
-          add(
-            VisibleTab("recents", recentsLabel, Icons.Filled.History) {
-              RecentlyPlayedScreen.Content()
-            }
-          )
-        }
-        if (enableTabPlaylists) {
-          add(
-            VisibleTab("playlists", playlistsLabel, Icons.AutoMirrored.Filled.PlaylistPlay) {
-              PlaylistScreen.Content()
-            }
-          )
-        }
-        if (enableTabMusic) {
-          add(
-            VisibleTab("music", musicLabel, Icons.Filled.LibraryMusic) {
-              MusicLibraryScreen.Content()
-            }
-          )
-        }
-        if (enableTabNetwork) {
-          add(
-            VisibleTab("network", networkLabel, Icons.Filled.Language) {
-              NetworkStreamingScreen.Content()
-            }
-          )
         }
       }
     }
 
-    // Ensure selectedTab is always clamped within active tabs range
+    val pagerState = rememberPagerState(
+      initialPage = persistentSelectedTab.coerceIn(0, maxOf(0, visibleTabs.lastIndex)),
+      pageCount = { visibleTabs.size }
+    )
+
+    // Sync selected tab with persistent tracking
+    LaunchedEffect(pagerState) {
+      snapshotFlow { pagerState.currentPage }.collect { page ->
+        if (page in visibleTabs.indices) {
+          persistentPreviousTab = persistentSelectedTab
+          persistentSelectedTab = page
+          persistentSelectedTabId = visibleTabs[page].id
+        }
+      }
+    }
+
+    // Keep active tab stable when visibleTabs list changes
     LaunchedEffect(visibleTabs) {
-      if (selectedTab >= visibleTabs.size) {
-        selectedTab = 0
+      val targetIndex = visibleTabs.indexOfFirst { it.id == persistentSelectedTabId }
+      if (targetIndex != -1 && targetIndex != pagerState.currentPage) {
+        pagerState.scrollToPage(targetIndex)
+      } else if (pagerState.currentPage >= visibleTabs.size && visibleTabs.isNotEmpty()) {
+        pagerState.scrollToPage(0)
       }
     }
-
-    // Intercept back button when on some tabs if needed
-    // ... (logic removed)
 
     // Shared state (across the app) collected reactively via StateFlow
     val isInSelectionMode by _isInSelectionModeShared.collectAsState()
@@ -230,143 +253,147 @@ object MainScreen : Screen {
     val rawSelectionManager by _sharedVideoSelectionManager.collectAsState()
     val videoSelectionManager = rawSelectionManager as? SelectionManager<*, *>
 
-    // Update persistent state whenever tab changes
-    LaunchedEffect(selectedTab) {
-      if (selectedTab != persistentSelectedTab) {
-        previousTab = persistentSelectedTab
-        persistentPreviousTab = previousTab
-      }
-      android.util.Log.d("MainScreen", "selectedTab changed to: $selectedTab (was ${persistentSelectedTab}), previousTab is $previousTab")
-      persistentSelectedTab = selectedTab
-    }
-
     // Handle tab requests from other screens
     LaunchedEffect(Unit) {
       tabRequest.collect { tab ->
-        selectedTab = tab
+        if (tab in visibleTabs.indices) {
+          pagerState.animateScrollToPage(tab)
+        }
       }
     }
 
-    // Scaffold with bottom navigation bar
     Scaffold(
       modifier = Modifier.fillMaxSize(),
-      bottomBar = {
-        // Animated bottom navigation bar with slide animations
-        AnimatedVisibility(
-            visible = !hideNavigationBar && visibleTabs.size > 1,
-            enter = slideInVertically(
-              animationSpec = tween(durationMillis = 300),
-              initialOffsetY = { fullHeight -> fullHeight }
-            ),
-            exit = slideOutVertically(
-              animationSpec = tween(durationMillis = 300),
-              targetOffsetY = { fullHeight -> fullHeight }
-            )
-          ) {
-            NavigationBar(
-              modifier = Modifier
-                .clip(
-                  RoundedCornerShape(
-                    topStart = 28.dp,
-                    topEnd = 28.dp,
-                    bottomStart = 0.dp,
-                    bottomEnd = 0.dp
-                  )
-                ),
-            ) {
-              visibleTabs.forEachIndexed { index, tab ->
-                NavigationBarItem(
-                  icon = { Icon(tab.icon, contentDescription = tab.label) },
-                  label = { Text(tab.label) },
-                  selected = selectedTab == index,
-                  onClick = {
-                    if (selectedTab == index) {
-                      _scrollToTopRequest.tryEmit(tab.id)
-                    } else {
-                      selectedTab = index
-                    }
-                  }
-                )
-              }
-            }
-          }
-        }
+      containerColor = MaterialTheme.colorScheme.background,
     ) { paddingValues ->
       Box(modifier = Modifier.fillMaxSize()) {
-        val fabBottomPadding = 80.dp
+        val fabBottomPadding = 92.dp
+        val isNavBarVisible = !hideNavigationBar && visibleTabs.size > 1
+        val navBarHeight = if (isNavBarVisible) fabBottomPadding else 0.dp
+        val miniPlayerHeight = if (miniPlayerState.isPlaybackActive) 72.dp else 0.dp
+        val totalBottomPadding = navBarHeight + miniPlayerHeight
 
-        AnimatedContent(
-          targetState = selectedTab,
-          transitionSpec = {
-            val slideDistance = with(density) { 48.dp.roundToPx() }
-            val animationDuration = 250
-            
-            if (targetState > initialState) {
-              (slideInHorizontally(
-                animationSpec = tween(
-                  durationMillis = animationDuration,
-                  easing = FastOutSlowInEasing
-                ),
-                initialOffsetX = { slideDistance }
-              ) + fadeIn(
-                animationSpec = tween(
-                  durationMillis = animationDuration,
-                  easing = FastOutSlowInEasing
-                )
-              )) togetherWith (slideOutHorizontally(
-                animationSpec = tween(
-                  durationMillis = animationDuration,
-                  easing = FastOutSlowInEasing
-                ),
-                targetOffsetX = { -slideDistance }
-              ) + fadeOut(
-                animationSpec = tween(
-                  durationMillis = animationDuration / 2,
-                  easing = FastOutSlowInEasing
-                )
-              ))
-            } else {
-              (slideInHorizontally(
-                animationSpec = tween(
-                  durationMillis = animationDuration,
-                  easing = FastOutSlowInEasing
-                ),
-                initialOffsetX = { -slideDistance }
-              ) + fadeIn(
-                animationSpec = tween(
-                  durationMillis = animationDuration,
-                  easing = FastOutSlowInEasing
-                )
-              )) togetherWith (slideOutHorizontally(
-                animationSpec = tween(
-                  durationMillis = animationDuration,
-                  easing = FastOutSlowInEasing
-                ),
-                targetOffsetX = { slideDistance }
-              ) + fadeOut(
-                animationSpec = tween(
-                  durationMillis = animationDuration / 2,
-                  easing = FastOutSlowInEasing
-                )
-              ))
-            }
-          },
-          label = "tab_animation"
-        ) { targetTab ->
-          val isNavBarVisible = !hideNavigationBar && visibleTabs.size > 1
-          
-          val navBarHeight = if (isNavBarVisible) fabBottomPadding else 0.dp
-          val miniPlayerHeight = if (miniPlayerState.isPlaybackActive) 72.dp else 0.dp
-          val totalBottomPadding = navBarHeight + miniPlayerHeight
-          
-          CompositionLocalProvider(
-            LocalNavigationBarHeight provides totalBottomPadding
-          ) {
-            if (targetTab in visibleTabs.indices) {
-              visibleTabs[targetTab].content()
+        CompositionLocalProvider(
+          LocalNavigationBarHeight provides totalBottomPadding
+        ) {
+          HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize(),
+            beyondViewportPageCount = 1,
+            key = { page -> visibleTabs.getOrNull(page)?.id ?: page }
+          ) { page ->
+            if (page in visibleTabs.indices) {
+              visibleTabs[page].content()
             } else {
               FolderListScreen.Content()
             }
+          }
+        }
+
+        // Floating Pill Bottom Navigation Bar matching reference design
+        AnimatedVisibility(
+          visible = !hideNavigationBar && visibleTabs.size > 1,
+          enter = slideInVertically(
+            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+            initialOffsetY = { fullHeight -> fullHeight }
+          ) + fadeIn(animationSpec = tween(durationMillis = 250)),
+          exit = slideOutVertically(
+            animationSpec = tween(durationMillis = 300, easing = FastOutSlowInEasing),
+            targetOffsetY = { fullHeight -> fullHeight }
+          ) + fadeOut(animationSpec = tween(durationMillis = 200)),
+          modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+          FloatingPillBottomBar(
+            visibleTabs = visibleTabs,
+            selectedIndex = pagerState.currentPage,
+            onTabSelected = { index, tab ->
+              if (pagerState.currentPage == index) {
+                _scrollToTopRequest.tryEmit(tab.id)
+              } else {
+                coroutineScope.launch {
+                  pagerState.animateScrollToPage(index)
+                }
+              }
+            },
+            modifier = Modifier
+              .padding(bottom = if (miniPlayerState.isPlaybackActive) 76.dp else 0.dp)
+          )
+        }
+      }
+    }
+  }
+}
+
+@Composable
+private fun FloatingPillBottomBar(
+  visibleTabs: List<VisibleTab>,
+  selectedIndex: Int,
+  onTabSelected: (Int, VisibleTab) -> Unit,
+  modifier: Modifier = Modifier,
+) {
+  Surface(
+    modifier = modifier
+      .padding(horizontal = 16.dp, vertical = 8.dp)
+      .navigationBarsPadding(),
+    shape = RoundedCornerShape(36.dp),
+    color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
+    tonalElevation = 6.dp,
+    shadowElevation = 10.dp,
+    border = BorderStroke(
+      width = 1.dp,
+      color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.2f),
+    ),
+  ) {
+    Row(
+      modifier = Modifier
+        .padding(horizontal = 6.dp, vertical = 6.dp),
+      horizontalArrangement = Arrangement.spacedBy(4.dp),
+      verticalAlignment = Alignment.CenterVertically,
+    ) {
+      visibleTabs.forEachIndexed { index, tab ->
+        val isSelected = selectedIndex == index
+
+        val animatedBgColor by animateColorAsState(
+          targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+          animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+          label = "tab_bg_color",
+        )
+        val contentColor by animateColorAsState(
+          targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f),
+          animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing),
+          label = "tab_content_color",
+        )
+
+        Box(
+          modifier = Modifier
+            .clip(RoundedCornerShape(26.dp))
+            .background(animatedBgColor)
+            .clickable(
+              interactionSource = remember { MutableInteractionSource() },
+              indication = ripple(bounded = true, radius = 32.dp),
+              onClick = { onTabSelected(index, tab) },
+            )
+            .padding(horizontal = 14.dp, vertical = 6.dp),
+          contentAlignment = Alignment.Center,
+        ) {
+          Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center,
+          ) {
+            Icon(
+              imageVector = tab.icon,
+              contentDescription = tab.label,
+              tint = contentColor,
+              modifier = Modifier.size(22.dp),
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+              text = tab.label,
+              style = MaterialTheme.typography.labelSmall,
+              fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+              color = contentColor,
+              maxLines = 1,
+            )
           }
         }
       }

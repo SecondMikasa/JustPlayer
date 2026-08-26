@@ -718,6 +718,8 @@ class PlayerViewModel(
     }
   }
 
+  private var clearLoadingJob: kotlinx.coroutines.Job? = null
+
   fun resetExternalAudioTracks() {
     synchronized(_externalAudioTracks) {
       _externalAudioTracks.clear()
@@ -726,6 +728,7 @@ class PlayerViewModel(
   }
 
   fun prepareForFileLoad(initialDurationSec: Float? = null) {
+    clearLoadingJob?.cancel()
     _isLoading.value = true
     resetExternalAudioTracks()
     _precisePosition.value = 0f
@@ -739,6 +742,7 @@ class PlayerViewModel(
   }
 
   fun onFileStartLoading() {
+    clearLoadingJob?.cancel()
     _isLoading.value = true
     if (_externalAudioTracks.isEmpty()) {
       _precisePosition.value = 0f
@@ -758,14 +762,27 @@ class PlayerViewModel(
     }
   }
 
+  fun externalAudioTracksEmpty(): Boolean = _externalAudioTracks.isEmpty()
+
+  fun updateDuration(durationSec: Double) {
+    _primaryVideoDuration.value = durationSec
+    _preciseDuration.value = durationSec.toFloat()
+  }
+
   fun clearLoadingState(immediate: Boolean = false, unpauseAfter: Boolean = false) {
+    clearLoadingJob?.cancel()
     if (immediate) {
       _isLoading.value = false
     } else {
-      viewModelScope.launch {
+      clearLoadingJob = viewModelScope.launch {
         // Force a delay to prevent thumbnail flashes and allow UI state to settle.
-        // Use a shorter delay for audio as it's typically faster.
-        val settleDelay = if (isAudioMedia.value) 50L else 800L
+        // Use a shorter delay for audio, and dynamically reduce delay for very short videos
+        val currentDuration = _preciseDuration.value
+        val settleDelay = when {
+          isAudioMedia.value -> 50L
+          currentDuration > 0f && currentDuration <= 5f -> 100L
+          else -> 800L
+        }
         delay(settleDelay)
         _isLoading.value = false
         if (unpauseAfter) {

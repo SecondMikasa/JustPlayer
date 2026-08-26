@@ -137,6 +137,7 @@ import kotlin.math.roundToInt
 data class VideoListScreen(
   private val bucketId: String,
   private val folderName: String,
+  private val isEmbedded: Boolean = false,
 ) : Screen {
   @OptIn(ExperimentalMaterial3ExpressiveApi::class)
   @Composable
@@ -365,106 +366,110 @@ data class VideoListScreen(
 
     Scaffold(
       topBar = {
-        BrowserTopBar(
-          title = displayFolderName,
-          isInSelectionMode = selectionManager.isInSelectionMode,
-          selectedCount = selectionManager.selectedCount,
-          totalCount = sortedVideosWithInfo.size,
-          onBackClick = {
-            if (selectionManager.isInSelectionMode) {
-              selectionManager.clear()
-            } else {
-              backstack.removeLastOrNull()
-            }
-          },
-          onCancelSelection = { selectionManager.clear() },
-          onSortClick = { sortDialogOpen.value = true },
-          onSettingsClick = {
-            backstack.add(xyz.mpv.rex.ui.preferences.PreferencesScreen)
-          },
-          isSingleSelection = selectionManager.isSingleSelection,
-          onInfoClick = {
-            val selected = selectionManager.getSelectedItems()
-            if (selectionManager.isSingleSelection) {
-              mediaInfoUri = selected.firstOrNull()?.uri
-            } else {
-              multiSelectionInfo = Triple(
-                selected.size,
-                selected.sumOf { it.size },
-                selected.sumOf { it.duration },
-              )
-            }
-          },
-          onPlayClick = { selectionManager.playSelected() },
-          selectionOverflowActions = buildList {
-            add(
-              SelectionOverflowAction(
-                icon = Icons.Filled.PictureInPictureAlt,
-                label = stringResource(R.string.open_with_mini_player),
-                onClick = { selectionManager.playSelectedInMiniPlayer() },
-              )
-            )
-            add(
-              SelectionOverflowAction(
-                icon = Icons.Filled.Share,
-                label = stringResource(R.string.generic_share),
-                onClick = { selectionManager.shareSelected() },
-              )
-            )
-            val selectedVideos = selectionManager.getSelectedItems()
-            if (selectedVideos.isNotEmpty()) {
+        if (!isEmbedded || selectionManager.isInSelectionMode) {
+          BrowserTopBar(
+            title = displayFolderName,
+            isInSelectionMode = selectionManager.isInSelectionMode,
+            selectedCount = selectionManager.selectedCount,
+            totalCount = sortedVideosWithInfo.size,
+            onBackClick = {
+              if (selectionManager.isInSelectionMode) {
+                selectionManager.clear()
+              } else {
+                backstack.removeLastOrNull()
+              }
+            },
+            onCancelSelection = { selectionManager.clear() },
+            onSortClick = { sortDialogOpen.value = true },
+            onSettingsClick = {
+              backstack.add(xyz.mpv.rex.ui.preferences.PreferencesScreen)
+            },
+            isSingleSelection = selectionManager.isSingleSelection,
+            onInfoClick = {
+              val selected = selectionManager.getSelectedItems()
+              if (selectionManager.isSingleSelection) {
+                mediaInfoUri = selected.firstOrNull()?.uri
+              } else {
+                multiSelectionInfo = Triple(
+                  selected.size,
+                  selected.sumOf { it.size },
+                  selected.sumOf { it.duration },
+                )
+              }
+            },
+            onPlayClick = { selectionManager.playSelected() },
+            selectionOverflowActions = buildList {
               add(
                 SelectionOverflowAction(
-                  icon = Icons.Filled.ContentCopy,
-                  label = stringResource(R.string.copy_video_path),
-                  onClick = {
-                    val paths = selectedVideos.joinToString("\n") { it.path }
-                    clipboardManager.setText(AnnotatedString(paths))
-                    Toast.makeText(context, R.string.copied_to_clipboard, Toast.LENGTH_SHORT).show()
-                  }
+                  icon = Icons.Filled.PictureInPictureAlt,
+                  label = stringResource(R.string.open_with_mini_player),
+                  onClick = { selectionManager.playSelectedInMiniPlayer() },
                 )
               )
-            }
-          },
+              add(
+                SelectionOverflowAction(
+                  icon = Icons.Filled.Share,
+                  label = stringResource(R.string.generic_share),
+                  onClick = { selectionManager.shareSelected() },
+                )
+              )
+              val selectedVideos = selectionManager.getSelectedItems()
+              if (selectedVideos.isNotEmpty()) {
+                add(
+                  SelectionOverflowAction(
+                    icon = Icons.Filled.ContentCopy,
+                    label = stringResource(R.string.copy_video_path),
+                    onClick = {
+                      val paths = selectedVideos.joinToString("\n") { it.path }
+                      clipboardManager.setText(AnnotatedString(paths))
+                      Toast.makeText(context, R.string.copied_to_clipboard, Toast.LENGTH_SHORT).show()
+                    }
+                  )
+                )
+              }
+            },
 
-          onSelectAll = { selectionManager.selectAll() },
-          onInvertSelection = { selectionManager.invertSelection() },
-          onDeselectAll = { selectionManager.clear() },
-        )
+            onSelectAll = { selectionManager.selectAll() },
+            onInvertSelection = { selectionManager.invertSelection() },
+            onDeselectAll = { selectionManager.clear() },
+          )
+        }
       },
       floatingActionButton = {
-        val navigationBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
-        if (sortedVideosWithInfo.isNotEmpty()) {
-          TooltipBox(
-            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
-            tooltip = { PlainTooltip { Text(stringResource(R.string.play_recently_played_or_first)) } },
-            state = rememberTooltipState(),
-          ) {
-            FloatingActionButton(
-              modifier = Modifier
-                .windowInsetsPadding(WindowInsets.systemBars)
-                .padding(bottom = navigationBarHeight)
-                .animateFloatingActionButton(
-                  visible = !selectionManager.isInSelectionMode && isFabVisible.value,
-                  alignment = Alignment.BottomEnd,
-                ),
-              onClick = {
-                coroutineScope.launch {
-                  val folderPath = sortedVideosWithInfo.firstOrNull()?.video?.path?.let { File(it).parent } ?: ""
-                  val recentlyPlayedVideos = RecentlyPlayedOps.getRecentlyPlayed(limit = 100)
-                  val lastPlayedInFolder = recentlyPlayedVideos.firstOrNull {
-                    File(it.filePath).parent == folderPath
-                  }
-
-                  if (lastPlayedInFolder != null) {
-                    MediaUtils.playFile(lastPlayedInFolder.filePath, context, "recently_played_button")
-                  } else {
-                    MediaUtils.playFile(sortedVideosWithInfo.first().video, context, "first_video_button")
-                  }
-                }
-              },
+        if (!isEmbedded) {
+          val navigationBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
+          if (sortedVideosWithInfo.isNotEmpty()) {
+            TooltipBox(
+              positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Above),
+              tooltip = { PlainTooltip { Text(stringResource(R.string.play_recently_played_or_first)) } },
+              state = rememberTooltipState(),
             ) {
-              Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(R.string.play_recently_played_or_first))
+              FloatingActionButton(
+                modifier = Modifier
+                  .windowInsetsPadding(WindowInsets.systemBars)
+                  .padding(bottom = navigationBarHeight)
+                  .animateFloatingActionButton(
+                    visible = !selectionManager.isInSelectionMode && isFabVisible.value,
+                    alignment = Alignment.BottomEnd,
+                  ),
+                onClick = {
+                  coroutineScope.launch {
+                    val folderPath = sortedVideosWithInfo.firstOrNull()?.video?.path?.let { File(it).parent } ?: ""
+                    val recentlyPlayedVideos = RecentlyPlayedOps.getRecentlyPlayed(limit = 100)
+                    val lastPlayedInFolder = recentlyPlayedVideos.firstOrNull {
+                      File(it.filePath).parent == folderPath
+                    }
+
+                    if (lastPlayedInFolder != null) {
+                      MediaUtils.playFile(lastPlayedInFolder.filePath, context, "recently_played_button")
+                    } else {
+                      MediaUtils.playFile(sortedVideosWithInfo.first().video, context, "first_video_button")
+                    }
+                  }
+                },
+              ) {
+                Icon(Icons.Filled.PlayArrow, contentDescription = stringResource(R.string.play_recently_played_or_first))
+              }
             }
           }
         }

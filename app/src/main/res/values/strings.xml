@@ -25,6 +25,14 @@
     <string name="pref_appearance_tab_network_summary">Access SMB, FTP, and WebDAV drives</string>
     <string name="pref_appearance_tab_music_title">Music</string>
     <string name="pref_appearance_tab_music_summary">Browse audio files as Songs, Albums, and Artists</string>
+    <string name="pref_appearance_tab_order_title">Rearrange tabs</string>
+    <string name="pref_appearance_tab_order_summary">Change the display order of bottom navigation tabs</string>
+    <string name="pref_appearance_tab_order_sheet_subtitle">Drag items or use arrow buttons to reorder tabs</string>
+    <string name="pref_appearance_tab_order_reset">Reset order</string>
+    <string name="pref_appearance_tab_order_reset_confirm">Reset tab order to default?</string>
+    <string name="pref_appearance_dual_pane_title">Dual panel layout</string>
+    <string name="pref_appearance_dual_pane_summary">Show folders and videos side-by-side on tablets &amp; wide screens</string>
+    <string name="select_folder_to_view_videos">Select a folder to view its videos</string>
     <string name="pref_appearance_summary">Dark mode, Material You</string>
     <string name="pref_appearance_category_theme">Theme</string>
     <string name="pref_appearance_darkmode_system">System</string>
@@ -478,7 +486,7 @@
     <string name="volume_slider_absolute_value" translatable="false">%d</string>
     <string name="value_percentage_int" translatable="false">%d%%</string>
 
-    <string name="github_repo_url" translatable="false">https://github.com/sfsakhawat999/JustPlayer</string>
+    <string name="github_repo_url" translatable="false">https://github.com/SecondMikasa/JustPlayer</string>
     <string name="swap_the_volume_and_brightness_slider">Swap volume and brightness slider</string>
     <string name="pref_player_display_reduce_player_animation">Reduce player animation</string>
     <string name="pref_player_display_hide_player_control_time">Hide player control time</string>

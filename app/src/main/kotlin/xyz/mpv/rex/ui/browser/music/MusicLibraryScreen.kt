@@ -17,18 +17,16 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -55,15 +53,18 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import xyz.mpv.rex.R
 import xyz.mpv.rex.domain.media.model.MusicAlbum
 import xyz.mpv.rex.domain.media.model.MusicArtist
-import xyz.mpv.rex.domain.media.model.MusicSortField
-import xyz.mpv.rex.domain.media.model.MusicSortOrder
 import xyz.mpv.rex.domain.media.model.MusicTab
 import xyz.mpv.rex.domain.media.model.Video
-import xyz.mpv.rex.presentation.Screen
+import xyz.mpv.rex.preferences.BrowserPreferences
+import xyz.mpv.rex.preferences.MediaLayoutMode
 import xyz.mpv.rex.preferences.UiSettings
+import xyz.mpv.rex.preferences.preference.collectAsState
+import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.browser.LocalNavigationBarHeight
 import xyz.mpv.rex.ui.browser.cards.VideoCard
 import xyz.mpv.rex.ui.browser.components.BrowserBottomBar
@@ -73,29 +74,21 @@ import xyz.mpv.rex.ui.browser.dialogs.DeleteConfirmationDialog
 import xyz.mpv.rex.ui.browser.dialogs.RenameDialog
 import xyz.mpv.rex.ui.browser.playlist.PlaylistScreen
 import xyz.mpv.rex.ui.browser.selection.rememberSelectionManager
+import xyz.mpv.rex.ui.utils.LocalBackStack
 import xyz.mpv.rex.utils.media.MediaUtils
 
 /**
  * Music library tab: Songs / Albums / Artists / Playlists.
- *
- * Changes vs original:
- *  - SongList / ArtistList / AlbumGrid: bottom content padding uses
- *    [LocalNavigationBarHeight] so the last item is never hidden behind
- *    the bottom navigation bar.
- *  - Multi-select: long-press a song to enter selection mode.
- *    The shared [rememberSelectionManager] + [BrowserTopBar] +
- *    [BrowserBottomBar] components provide play, add-to-playlist, rename
- *    and delete — exactly the same as the video list screen.
- *  - Auto-playlist: tapping a song now passes `"media_library_list"` as
- *    the launch source so PlayerActivity calls generateMediaLibraryPlaylist()
- *    and the whole music library becomes the play queue.
  */
 object MusicLibraryScreen : Screen {
   @OptIn(ExperimentalMaterial3Api::class)
   @Composable
   override fun Content() {
     val context = LocalContext.current
+    val backstack = LocalBackStack.current
     val coroutineScope = rememberCoroutineScope()
+    val browserPreferences = koinInject<BrowserPreferences>()
+
     val viewModel: MusicLibraryViewModel = viewModel(
       factory = MusicLibraryViewModel.factory(context.applicationContext as android.app.Application),
     )
@@ -109,6 +102,9 @@ object MusicLibraryScreen : Screen {
     val sortOrder      by viewModel.sortOrder.collectAsState()
     val uiSettings     by viewModel.uiSettings.collectAsState()
 
+    val musicLayoutMode by browserPreferences.musicLayoutMode.collectAsState()
+    val musicCoverArtSize by browserPreferences.musicCoverArtSize.collectAsState()
+
     // ── Selection ──────────────────────────────────────────────────────────
     val selectionManager = rememberSelectionManager(
       items = filteredSongs,
@@ -119,18 +115,36 @@ object MusicLibraryScreen : Screen {
     )
 
     // ── Dialog state ───────────────────────────────────────────────────────
-    val deleteDialogOpen      = rememberSaveable { mutableStateOf(false) }
-    val renameDialogOpen      = rememberSaveable { mutableStateOf(false) }
+    val deleteDialogOpen        = rememberSaveable { mutableStateOf(false) }
+    val renameDialogOpen        = rememberSaveable { mutableStateOf(false) }
     val addToPlaylistDialogOpen = rememberSaveable { mutableStateOf(false) }
+    var showSortAndLayoutDialog by rememberSaveable { mutableStateOf(false) }
 
     // ── Search / sort ──────────────────────────────────────────────────────
     var isSearching by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var showSortMenu by remember { mutableStateOf(false) }
 
     // Inline drill-in state
     var openAlbum  by remember { mutableStateOf<MusicAlbum?>(null) }
     var openArtist by remember { mutableStateOf<MusicArtist?>(null) }
+
+    val musicTabs = remember { MusicTab.entries }
+    val pagerState = rememberPagerState(
+      initialPage = selectedTab.ordinal.coerceIn(0, maxOf(0, musicTabs.lastIndex)),
+      pageCount = { musicTabs.size }
+    )
+
+    LaunchedEffect(pagerState.currentPage) {
+      if (pagerState.currentPage in musicTabs.indices) {
+        viewModel.selectTab(musicTabs[pagerState.currentPage])
+      }
+    }
+
+    LaunchedEffect(selectedTab) {
+      if (selectedTab.ordinal in musicTabs.indices && selectedTab.ordinal != pagerState.currentPage) {
+        pagerState.animateScrollToPage(selectedTab.ordinal)
+      }
+    }
 
     LaunchedEffect(searchQuery) { viewModel.setSearchQuery(searchQuery) }
 
@@ -192,36 +206,18 @@ object MusicLibraryScreen : Screen {
             onSearchClick = if (!selectionManager.isInSelectionMode && openAlbum == null && openArtist == null) {
               { isSearching = true }
             } else null,
+            onSortClick = if (!selectionManager.isInSelectionMode && openAlbum == null && openArtist == null) {
+              { showSortAndLayoutDialog = true }
+            } else null,
+            onSettingsClick = if (!selectionManager.isInSelectionMode && openAlbum == null && openArtist == null) {
+              { backstack.add(xyz.mpv.rex.ui.preferences.PreferencesScreen) }
+            } else null,
             onSelectAll    = { selectionManager.selectAll() },
             onInvertSelection = { selectionManager.invertSelection() },
             onDeselectAll  = { selectionManager.clear() },
             onPlayClick    = if (selectionManager.isInSelectionMode) {
               { selectionManager.playSelected() }
             } else null,
-            additionalActions = {
-              if (!selectionManager.isInSelectionMode && openAlbum == null && openArtist == null && selectedTab == MusicTab.SONGS) {
-                Box {
-                  IconButton(onClick = { showSortMenu = true }) {
-                    Icon(Icons.Filled.SwapVert, contentDescription = stringResource(R.string.sort))
-                  }
-                  DropdownMenu(expanded = showSortMenu, onDismissRequest = { showSortMenu = false }) {
-                    MusicSortField.entries.forEach { field ->
-                      DropdownMenuItem(
-                        text = { Text(field.displayName) },
-                        trailingIcon = if (field == sortField) {
-                          { Icon(Icons.Filled.Check, contentDescription = null) }
-                        } else null,
-                        onClick = { viewModel.setSortField(field); showSortMenu = false },
-                      )
-                    }
-                    DropdownMenuItem(
-                      text = { Text(if (sortOrder == MusicSortOrder.ASCENDING) "Ascending" else "Descending") },
-                      onClick = { viewModel.toggleSortOrder(); showSortMenu = false },
-                    )
-                  }
-                }
-              }
-            },
           )
         }
       },
@@ -229,11 +225,15 @@ object MusicLibraryScreen : Screen {
       Box(modifier = Modifier.fillMaxSize()) {
         Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
           if (openAlbum == null && openArtist == null) {
-            TabRow(selectedTabIndex = selectedTab.ordinal) {
-              MusicTab.entries.forEach { tab ->
+            TabRow(selectedTabIndex = pagerState.currentPage) {
+              musicTabs.forEachIndexed { index, tab ->
                 Tab(
-                  selected = selectedTab == tab,
-                  onClick = { viewModel.selectTab(tab) },
+                  selected = pagerState.currentPage == index,
+                  onClick = {
+                    coroutineScope.launch {
+                      pagerState.animateScrollToPage(index)
+                    }
+                  },
                   text = { Text(tab.title) },
                 )
               }
@@ -248,6 +248,8 @@ object MusicLibraryScreen : Screen {
                   songs = songs,
                   uiSettings = uiSettings,
                   selectionManager = null,   // no multi-select in drill-in
+                  layoutMode = musicLayoutMode,
+                  coverArtSize = musicCoverArtSize,
                   onSongClick = { song -> playSongWithQueue(song, songs) },
                 )
               }
@@ -257,21 +259,34 @@ object MusicLibraryScreen : Screen {
                   songs = songs,
                   uiSettings = uiSettings,
                   selectionManager = null,
+                  layoutMode = musicLayoutMode,
+                  coverArtSize = musicCoverArtSize,
                   onSongClick = { song -> playSongWithQueue(song, songs) },
                 )
               }
               isLoading && filteredSongs.isEmpty() ->
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
-              else -> when (selectedTab) {
-                MusicTab.SONGS -> SongList(
-                  songs = filteredSongs,
-                  uiSettings = uiSettings,
-                  selectionManager = selectionManager,
-                  onSongClick = { song -> playSongWithQueue(song, filteredSongs) },
-                )
-                MusicTab.ALBUMS  -> AlbumGrid(albums = albums, onAlbumClick = { openAlbum = it })
-                MusicTab.ARTISTS -> ArtistList(artists = artists, onArtistClick = { openArtist = it })
-                MusicTab.PLAYLISTS -> PlaylistScreen.Content()
+              else -> {
+                HorizontalPager(
+                  state = pagerState,
+                  modifier = Modifier.fillMaxSize(),
+                  beyondViewportPageCount = 1,
+                  key = { page -> musicTabs[page].name }
+                ) { page ->
+                  when (musicTabs[page]) {
+                    MusicTab.SONGS -> SongList(
+                      songs = filteredSongs,
+                      uiSettings = uiSettings,
+                      selectionManager = selectionManager,
+                      layoutMode = musicLayoutMode,
+                      coverArtSize = musicCoverArtSize,
+                      onSongClick = { song -> playSongWithQueue(song, filteredSongs) },
+                    )
+                    MusicTab.ALBUMS -> AlbumGrid(albums = albums, onAlbumClick = { openAlbum = it })
+                    MusicTab.ARTISTS -> ArtistList(artists = artists, onArtistClick = { openArtist = it })
+                    MusicTab.PLAYLISTS -> PlaylistScreen.Content()
+                  }
+                }
               }
             }
           }
@@ -299,6 +314,19 @@ object MusicLibraryScreen : Screen {
       }
 
       // ── Dialogs ─────────────────────────────────────────────────────────
+      MusicSortViewOptionsDialog(
+        isOpen = showSortAndLayoutDialog,
+        onDismiss = { showSortAndLayoutDialog = false },
+        selectedSortField = sortField,
+        onSortFieldChange = { viewModel.setSortField(it) },
+        sortOrder = sortOrder,
+        onSortOrderChange = { viewModel.setSortOrder(it) },
+        layoutMode = musicLayoutMode,
+        onLayoutModeChange = { browserPreferences.musicLayoutMode.set(it) },
+        coverArtSize = musicCoverArtSize,
+        onCoverArtSizeChange = { browserPreferences.musicCoverArtSize.set(it) },
+      )
+
       DeleteConfirmationDialog(
         isOpen    = deleteDialogOpen.value,
         onDismiss = { deleteDialogOpen.value = false },
@@ -343,37 +371,69 @@ private fun SongList(
   songs: List<Video>,
   uiSettings: UiSettings,
   selectionManager: xyz.mpv.rex.ui.browser.selection.SelectionManager<Video, Long>?,
+  layoutMode: MediaLayoutMode = MediaLayoutMode.LIST,
+  coverArtSize: Int = 56,
   onSongClick: (Video) -> Unit,
 ) {
   if (songs.isEmpty()) {
     EmptyState(text = stringResource(R.string.no_songs_found))
     return
   }
-  // Add bottom padding equal to nav bar height so the last item is never
-  // hidden behind the bottom navigation bar or the mini player bar.
   val navBarHeight = LocalNavigationBarHeight.current
-  LazyColumn(
-    modifier = Modifier.fillMaxSize(),
-    contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp + navBarHeight),
-  ) {
-    items(songs, key = { it.id }) { song ->
-      val isSelected = selectionManager?.isSelected(song) == true
-      VideoCard(
-        video = song,
-        onClick = {
-          when {
-            selectionManager != null && selectionManager.isInSelectionMode ->
-              selectionManager.toggle(song)
-            else -> onSongClick(song)
-          }
-        },
-        onLongClick = { selectionManager?.handleLongClick(song) },
-        isSelected = isSelected,
-        uiSettings = uiSettings,
-        modifier = Modifier
-          .fillMaxWidth()
-          .padding(horizontal = 8.dp, vertical = 4.dp),
-      )
+  if (layoutMode == MediaLayoutMode.GRID) {
+    LazyVerticalGrid(
+      columns = GridCells.Adaptive(minSize = (coverArtSize * 2.5f).dp.coerceAtLeast(140.dp)),
+      modifier = Modifier.fillMaxSize(),
+      contentPadding = PaddingValues(
+        start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp + navBarHeight,
+      ),
+      horizontalArrangement = Arrangement.spacedBy(8.dp),
+      verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+      items(songs, key = { it.id }) { song ->
+        val isSelected = selectionManager?.isSelected(song) == true
+        VideoCard(
+          video = song,
+          onClick = {
+            when {
+              selectionManager != null && selectionManager.isInSelectionMode ->
+                selectionManager.toggle(song)
+              else -> onSongClick(song)
+            }
+          },
+          onLongClick = { selectionManager?.handleLongClick(song) },
+          isSelected = isSelected,
+          uiSettings = uiSettings,
+          isGridMode = true,
+          gridColumns = 2,
+          modifier = Modifier.fillMaxWidth(),
+        )
+      }
+    }
+  } else {
+    LazyColumn(
+      modifier = Modifier.fillMaxSize(),
+      contentPadding = PaddingValues(top = 8.dp, bottom = 8.dp + navBarHeight),
+    ) {
+      items(songs, key = { it.id }) { song ->
+        val isSelected = selectionManager?.isSelected(song) == true
+        VideoCard(
+          video = song,
+          onClick = {
+            when {
+              selectionManager != null && selectionManager.isInSelectionMode ->
+                selectionManager.toggle(song)
+              else -> onSongClick(song)
+            }
+          },
+          onLongClick = { selectionManager?.handleLongClick(song) },
+          isSelected = isSelected,
+          uiSettings = uiSettings,
+          modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+      }
     }
   }
 }
@@ -453,21 +513,35 @@ private fun ArtistList(
     items(artists, key = { it.name }) { artist ->
       Card(
         onClick = { onArtistClick(artist) },
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 8.dp, vertical = 4.dp),
         shape = RoundedCornerShape(12.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
       ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-          Icon(Icons.Filled.Person, contentDescription = null)
-          Text(
-            artist.name,
-            style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(top = 4.dp),
+        androidx.compose.foundation.layout.Row(
+          modifier = Modifier.padding(12.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Icon(
+            Icons.Filled.Person,
+            contentDescription = null,
+            modifier = Modifier.size(40.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
           )
-          Text(
-            "${artist.songCount} songs · ${artist.albumCount} albums",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-          )
+          Column(modifier = Modifier.padding(start = 12.dp)) {
+            Text(
+              artist.name,
+              style = MaterialTheme.typography.titleSmall,
+              maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+              "${artist.songCount} songs • ${artist.albumCount} albums",
+              style = MaterialTheme.typography.bodySmall,
+              color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+          }
         }
       }
     }
@@ -476,10 +550,13 @@ private fun ArtistList(
 
 @Composable
 private fun EmptyState(text: String) {
-  Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+  Box(
+    modifier = Modifier.fillMaxSize(),
+    contentAlignment = Alignment.Center,
+  ) {
     Text(
-      text,
-      style = MaterialTheme.typography.bodyLarge,
+      text = text,
+      style = MaterialTheme.typography.bodyMedium,
       color = MaterialTheme.colorScheme.onSurfaceVariant,
     )
   }

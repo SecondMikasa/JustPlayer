@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -62,7 +63,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material.icons.filled.SwapVert
+import me.zhanghai.compose.preference.Preference
+import xyz.mpv.rex.ui.preferences.components.RearrangeTabsSheet
 import xyz.mpv.rex.utils.media.MediaLibraryEvents
 import xyz.mpv.rex.utils.media.OpenDocumentTreeContract
 
@@ -105,6 +108,7 @@ object AppearancePreferencesScreen : Screen {
             }
         }
         val thumbnailRepository = koinInject<ThumbnailRepository>()
+        var showRearrangeTabsSheet by remember { mutableStateOf(false) }
         var showNetworkWarning by remember { mutableStateOf(false) }
         var pendingStrategyChange by remember { mutableStateOf<ThumbnailStrategy?>(null) }
         var pendingPositionChange by remember { mutableStateOf<Int?>(null) }
@@ -326,99 +330,125 @@ object AppearancePreferencesScreen : Screen {
 
                     item {
                         PreferenceCard {
-                            SwitchPreference(
-                                value = true,
-                                onValueChange = {},
-                                enabled = false,
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_home_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_home_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            )
-
-                            PreferenceDivider()
+                            val bottomNavTabOrder by browserPreferences.bottomNavTabOrder.collectAsState()
+                            val orderedTabIds = remember(bottomNavTabOrder) {
+                                BrowserPreferences.parseBottomNavTabOrder(bottomNavTabOrder)
+                            }
 
                             val enableTabRecents by browserPreferences.enableTabRecents.collectAsState()
                             val enableTabPlaylists by browserPreferences.enableTabPlaylists.collectAsState()
                             val enableTabNetwork by browserPreferences.enableTabNetwork.collectAsState()
                             val enableTabMusic by browserPreferences.enableTabMusic.collectAsState()
 
-                            SwitchPreference(
-                                value = enableTabRecents,
-                                onValueChange = { browserPreferences.enableTabRecents.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_recents_title),
-                                    )
-                                },
+                            Preference(
+                                title = { Text(text = stringResource(id = R.string.pref_appearance_tab_order_title)) },
                                 summary = {
                                     Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_recents_summary),
+                                        text = stringResource(id = R.string.pref_appearance_tab_order_summary),
                                         color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            )
-
-                            PreferenceDivider()
-
-                            SwitchPreference(
-                                value = enableTabPlaylists,
-                                onValueChange = { browserPreferences.enableTabPlaylists.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_playlists_title),
                                     )
                                 },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_playlists_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            )
-
-                            PreferenceDivider()
-
-                            SwitchPreference(
-                                value = enableTabNetwork,
-                                onValueChange = { browserPreferences.enableTabNetwork.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_network_title),
+                                icon = {
+                                    Icon(
+                                        imageVector = Icons.Default.SwapVert,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
                                     )
                                 },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_network_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
+                                onClick = { showRearrangeTabsSheet = true },
                             )
 
-                            PreferenceDivider()
-
-                            SwitchPreference(
-                                value = enableTabMusic,
-                                onValueChange = { browserPreferences.enableTabMusic.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_music_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_tab_music_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
+                            orderedTabIds.forEach { tabId ->
+                                PreferenceDivider()
+                                when (tabId) {
+                                    BrowserPreferences.TAB_HOME -> {
+                                        SwitchPreference(
+                                            value = true,
+                                            onValueChange = {},
+                                            enabled = false,
+                                            title = {
+                                                Text(
+                                                    text = stringResource(id = R.string.pref_appearance_tab_home_title),
+                                                )
+                                            },
+                                            summary = {
+                                                Text(
+                                                    text = stringResource(id = R.string.pref_appearance_tab_home_summary),
+                                                    color = MaterialTheme.colorScheme.outline,
+                                                )
+                                            }
+                                        )
+                                    }
+                                    BrowserPreferences.TAB_RECENTS -> {
+                                        SwitchPreference(
+                                            value = enableTabRecents,
+                                            onValueChange = { browserPreferences.enableTabRecents.set(it) },
+                                            title = {
+                                                Text(
+                                                    text = stringResource(id = R.string.pref_appearance_tab_recents_title),
+                                                )
+                                            },
+                                            summary = {
+                                                Text(
+                                                    text = stringResource(id = R.string.pref_appearance_tab_recents_summary),
+                                                    color = MaterialTheme.colorScheme.outline,
+                                                )
+                                            }
+                                        )
+                                    }
+                                    BrowserPreferences.TAB_PLAYLISTS -> {
+                                        SwitchPreference(
+                                            value = enableTabPlaylists,
+                                            onValueChange = { browserPreferences.enableTabPlaylists.set(it) },
+                                            title = {
+                                                Text(
+                                                    text = stringResource(id = R.string.pref_appearance_tab_playlists_title),
+                                                )
+                                            },
+                                            summary = {
+                                                Text(
+                                                    text = stringResource(id = R.string.pref_appearance_tab_playlists_summary),
+                                                    color = MaterialTheme.colorScheme.outline,
+                                                )
+                                            }
+                                        )
+                                    }
+                                    BrowserPreferences.TAB_NETWORK -> {
+                                        SwitchPreference(
+                                            value = enableTabNetwork,
+                                            onValueChange = { browserPreferences.enableTabNetwork.set(it) },
+                                            title = {
+                                                Text(
+                                                    text = stringResource(id = R.string.pref_appearance_tab_network_title),
+                                                )
+                                            },
+                                            summary = {
+                                                Text(
+                                                    text = stringResource(id = R.string.pref_appearance_tab_network_summary),
+                                                    color = MaterialTheme.colorScheme.outline,
+                                                )
+                                            }
+                                        )
+                                    }
+                                    BrowserPreferences.TAB_MUSIC -> {
+                                        SwitchPreference(
+                                            value = enableTabMusic,
+                                            onValueChange = { browserPreferences.enableTabMusic.set(it) },
+                                            title = {
+                                                Text(
+                                                    text = stringResource(id = R.string.pref_appearance_tab_music_title),
+                                                )
+                                            },
+                                            summary = {
+                                                Text(
+                                                    text = stringResource(id = R.string.pref_appearance_tab_music_summary),
+                                                    color = MaterialTheme.colorScheme.outline,
+                                                )
+                                            }
+                                        )
+                                    }
                                 }
-                            )
+                            }
                         }
                     }
 
@@ -428,6 +458,25 @@ object AppearancePreferencesScreen : Screen {
 
                     item {
                         PreferenceCard {
+                            val enableDualPane by browserPreferences.enableDualPane.collectAsState()
+                            SwitchPreference(
+                                value = enableDualPane,
+                                onValueChange = { browserPreferences.enableDualPane.set(it) },
+                                title = {
+                                    Text(
+                                        text = stringResource(id = R.string.pref_appearance_dual_pane_title),
+                                    )
+                                },
+                                summary = {
+                                    Text(
+                                        text = stringResource(id = R.string.pref_appearance_dual_pane_summary),
+                                        color = MaterialTheme.colorScheme.outline,
+                                    )
+                                }
+                            )
+
+                            PreferenceDivider()
+
                             val unlimitedNameLines by preferences.unlimitedNameLines.collectAsState()
                             SwitchPreference(
                                 value = unlimitedNameLines,
@@ -904,6 +953,15 @@ object AppearancePreferencesScreen : Screen {
 
                 }
             }
+        }
+
+        if (showRearrangeTabsSheet) {
+            val bottomNavTabOrder by browserPreferences.bottomNavTabOrder.collectAsState()
+            RearrangeTabsSheet(
+                currentOrder = bottomNavTabOrder,
+                onOrderChanged = { browserPreferences.bottomNavTabOrder.set(it) },
+                onDismiss = { showRearrangeTabsSheet = false }
+            )
         }
     }
 }

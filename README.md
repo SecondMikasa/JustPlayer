@@ -12,8 +12,6 @@
   <img src="https://img.shields.io/badge/Platform-Android-brightgreen.svg" />
   <img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg" />
   <img src="https://img.shields.io/badge/Kotlin-2.3.10-purple.svg" />
-  <a href="https://github.com/sfsakhawat999/JustPlayer/releases"><img src="https://img.shields.io/github/downloads/sfsakhawat999/JustPlayer/total?logo=Github"/></a>
-  <img src="https://img.shields.io/github/stars/sfsakhawat999/JustPlayer?style=flat&logo=github" />
 </p>
 
 JustPlayer is an advanced, customizable video player for Android. It combines the versatility of libmpv with a modern Jetpack Compose interface and unique user-centric features.
@@ -94,11 +92,8 @@ JustPlayer is an advanced, customizable video player for Android. It combines th
 ## Installation
 
 <div align="center">
-  <a href="https://github.com/sfsakhawat999/JustPlayer/releases">
+  <a href="https://github.com/SecondMikasa/JustPlayer/releases">
     <img src="https://img.shields.io/badge/Download-Stable_Release-blue?style=for-the-badge&logo=github" alt="Stable Release">
-  </a>
-  <a href="https://sfsakhawat999.github.io/JustPlayer">
-    <img src="https://img.shields.io/badge/Download-Preview_Build-orange?style=for-the-badge&logo=github" alt="Preview Release">
   </a>
 </div>
 

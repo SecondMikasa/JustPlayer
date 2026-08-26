@@ -395,6 +395,7 @@ fun PlayerSheets(
           onDismissRequest = onDismissRequest,
           onItemClick = { item ->
             viewModel.playPlaylistItem(item.index)
+            onDismissRequest()
           },
           onReorderItem = { from, to ->
             viewModel.reorderPlaylistItem(from, to)

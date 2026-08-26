@@ -40,6 +40,7 @@ class MusicLibraryViewModel(
 ) : BaseBrowserViewModel<Video>(application),
   KoinComponent {
   private val hybridMediaIndexRepository: HybridMediaIndexRepository by inject()
+  private val browserPreferences: xyz.mpv.rex.preferences.BrowserPreferences by inject()
 
   /** All audio items, alias of the base class's [items] for readability at call sites. */
   val songs: StateFlow<List<Video>> = items
@@ -47,10 +48,10 @@ class MusicLibraryViewModel(
   private val _selectedTab = MutableStateFlow(MusicTab.SONGS)
   val selectedTab: StateFlow<MusicTab> = _selectedTab.asStateFlow()
 
-  private val _sortField = MutableStateFlow(MusicSortField.TITLE)
+  private val _sortField = MutableStateFlow(browserPreferences.musicSortField.get())
   val sortField: StateFlow<MusicSortField> = _sortField.asStateFlow()
 
-  private val _sortOrder = MutableStateFlow(MusicSortOrder.ASCENDING)
+  private val _sortOrder = MutableStateFlow(browserPreferences.musicSortOrder.get())
   val sortOrder: StateFlow<MusicSortOrder> = _sortOrder.asStateFlow()
 
   private val _searchQuery = MutableStateFlow("")
@@ -162,10 +163,18 @@ class MusicLibraryViewModel(
 
   fun setSortField(field: MusicSortField) {
     _sortField.value = field
+    browserPreferences.musicSortField.set(field)
+  }
+
+  fun setSortOrder(order: MusicSortOrder) {
+    _sortOrder.value = order
+    browserPreferences.musicSortOrder.set(order)
   }
 
   fun toggleSortOrder() {
-    _sortOrder.value = if (_sortOrder.value == MusicSortOrder.ASCENDING) MusicSortOrder.DESCENDING else MusicSortOrder.ASCENDING
+    val newOrder = if (_sortOrder.value == MusicSortOrder.ASCENDING) MusicSortOrder.DESCENDING else MusicSortOrder.ASCENDING
+    _sortOrder.value = newOrder
+    browserPreferences.musicSortOrder.set(newOrder)
   }
 
   fun setSearchQuery(query: String) {

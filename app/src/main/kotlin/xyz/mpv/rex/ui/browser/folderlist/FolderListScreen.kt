@@ -17,6 +17,10 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -226,6 +230,10 @@ object FolderListScreen : Screen {
     val rememberedGridOffset = rememberSaveable { mutableIntStateOf(0) }
     val hasListAutoScrolled = rememberSaveable(inputs = arrayOf(recentlyPlayedFilePath ?: "")) { mutableStateOf(false) }
     val hasGridAutoScrolled = rememberSaveable(inputs = arrayOf(recentlyPlayedFilePath ?: "")) { mutableStateOf(false) }
+
+    var selectedFolderBucketId by rememberSaveable { mutableStateOf<String?>(null) }
+    var selectedFolderName by rememberSaveable { mutableStateOf<String?>(null) }
+    val enableDualPane by browserPreferences.enableDualPane.collectAsState()
 
     // Sorting and filtering
     val sortedFolders = remember(videoFolders, folderSortType, folderSortOrder) {
@@ -747,39 +755,120 @@ object FolderListScreen : Screen {
               )
             } else {
 
-            FolderListContent(
-              folders = filteredFolders,
-              foldersWithNewCount = foldersWithNewCount,
-              autoScrollToLastPlayed = autoScrollToLastPlayed,
-              uiSettings = uiSettings,
-              listState = listState,
-              gridState = gridState,
-              isRefreshing = isRefreshing,
-              isLoading = isLoading,
-              hasCompletedInitialLoad = hasCompletedInitialLoad,
-              foldersWereDeleted = foldersWereDeleted,
-              recentlyPlayedFilePath = recentlyPlayedFilePath,
-              recentlyPlayedFilePaths = recentlyPlayedFilePaths,
-              recentlyPlayedPaths = recentlyPlayedPaths,
-              playedFolderPaths = playedFolderPaths,
-              onRefresh = { viewModel.refresh() },
-              mediaLayoutMode = mediaLayoutMode,
-              folderGridColumns = folderGridColumns,
-              tapThumbnailToSelect = tapThumbnailToSelect,
-              navigationBarHeight = navigationBarHeight,
-              selectionManager = selectionManager,
-              onFolderClick = { folder ->
-                if (selectionManager.isInSelectionMode) {
-                  selectionManager.toggle(folder)
-                } else {
-                  backstack.add(xyz.mpv.rex.ui.browser.videolist.VideoListScreen(folder.bucketId, folder.name))
+              val screenWidthDp = LocalConfiguration.current.screenWidthDp
+              val isDualPaneActive = enableDualPane && screenWidthDp >= 600
+
+              if (isDualPaneActive) {
+                Row(modifier = Modifier.fillMaxSize()) {
+                  // Left Pane: Folders (38% width)
+                  Box(modifier = Modifier.weight(0.38f).fillMaxHeight()) {
+                    FolderListContent(
+                      folders = filteredFolders,
+                      foldersWithNewCount = foldersWithNewCount,
+                      autoScrollToLastPlayed = autoScrollToLastPlayed,
+                      uiSettings = uiSettings,
+                      listState = listState,
+                      gridState = gridState,
+                      isRefreshing = isRefreshing,
+                      isLoading = isLoading,
+                      hasCompletedInitialLoad = hasCompletedInitialLoad,
+                      foldersWereDeleted = foldersWereDeleted,
+                      recentlyPlayedFilePath = recentlyPlayedFilePath,
+                      recentlyPlayedFilePaths = recentlyPlayedFilePaths,
+                      recentlyPlayedPaths = recentlyPlayedPaths,
+                      playedFolderPaths = playedFolderPaths,
+                      onRefresh = { viewModel.refresh() },
+                      mediaLayoutMode = mediaLayoutMode,
+                      folderGridColumns = folderGridColumns,
+                      tapThumbnailToSelect = tapThumbnailToSelect,
+                      navigationBarHeight = navigationBarHeight,
+                      selectionManager = selectionManager,
+                      onFolderClick = { folder ->
+                        if (selectionManager.isInSelectionMode) {
+                          selectionManager.toggle(folder)
+                        } else {
+                          selectedFolderBucketId = folder.bucketId
+                          selectedFolderName = folder.name
+                        }
+                      },
+                      onFolderLongClick = { folder ->
+                        selectionManager.handleLongClick(folder)
+                      },
+                      scrollTriggerKey = "${folderSortType.name}:${folderSortOrder.name}",
+                    )
+                  }
+
+                  VerticalDivider(
+                    color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.fillMaxHeight().width(1.dp)
+                  )
+
+                  // Right Pane: Video List for selected folder (62% width)
+                  Box(modifier = Modifier.weight(0.62f).fillMaxHeight()) {
+                    val targetBucket = selectedFolderBucketId ?: filteredFolders.firstOrNull()?.bucketId
+                    val targetName = selectedFolderName ?: filteredFolders.firstOrNull()?.name ?: ""
+                    if (targetBucket != null) {
+                      xyz.mpv.rex.ui.browser.videolist.VideoListScreen(targetBucket, targetName, isEmbedded = true).Content()
+                    } else {
+                      Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                      ) {
+                        Column(
+                          horizontalAlignment = Alignment.CenterHorizontally,
+                          verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                          Icon(
+                            imageVector = Icons.Filled.VideoLibrary,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline,
+                            modifier = Modifier.size(48.dp)
+                          )
+                          Text(
+                            text = stringResource(R.string.select_folder_to_view_videos),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.outline
+                          )
+                        }
+                      }
+                    }
+                  }
                 }
-              },
-              onFolderLongClick = { folder ->
-                selectionManager.handleLongClick(folder)
-              },
-              scrollTriggerKey = "${folderSortType.name}:${folderSortOrder.name}",
-            )
+              } else {
+                FolderListContent(
+                  folders = filteredFolders,
+                  foldersWithNewCount = foldersWithNewCount,
+                  autoScrollToLastPlayed = autoScrollToLastPlayed,
+                  uiSettings = uiSettings,
+                  listState = listState,
+                  gridState = gridState,
+                  isRefreshing = isRefreshing,
+                  isLoading = isLoading,
+                  hasCompletedInitialLoad = hasCompletedInitialLoad,
+                  foldersWereDeleted = foldersWereDeleted,
+                  recentlyPlayedFilePath = recentlyPlayedFilePath,
+                  recentlyPlayedFilePaths = recentlyPlayedFilePaths,
+                  recentlyPlayedPaths = recentlyPlayedPaths,
+                  playedFolderPaths = playedFolderPaths,
+                  onRefresh = { viewModel.refresh() },
+                  mediaLayoutMode = mediaLayoutMode,
+                  folderGridColumns = folderGridColumns,
+                  tapThumbnailToSelect = tapThumbnailToSelect,
+                  navigationBarHeight = navigationBarHeight,
+                  selectionManager = selectionManager,
+                  onFolderClick = { folder ->
+                    if (selectionManager.isInSelectionMode) {
+                      selectionManager.toggle(folder)
+                    } else {
+                      backstack.add(xyz.mpv.rex.ui.browser.videolist.VideoListScreen(folder.bucketId, folder.name))
+                    }
+                  },
+                  onFolderLongClick = { folder ->
+                    selectionManager.handleLongClick(folder)
+                  },
+                  scrollTriggerKey = "${folderSortType.name}:${folderSortOrder.name}",
+                )
+              }
             }
           }
 
