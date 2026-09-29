@@ -41,6 +41,7 @@ import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 import xyz.mpv.rex.R
 import xyz.mpv.rex.domain.media.model.*
+import xyz.mpv.rex.preferences.AppearancePreferences
 import xyz.mpv.rex.preferences.BrowserPreferences
 import xyz.mpv.rex.preferences.MediaLayoutMode
 import xyz.mpv.rex.preferences.UiSettings
@@ -74,6 +75,7 @@ object MusicLibraryScreen : Screen {
     val backstack = LocalBackStack.current
     val coroutineScope = rememberCoroutineScope()
     val browserPreferences = koinInject<BrowserPreferences>()
+    val appearancePreferences = koinInject<AppearancePreferences>()
 
     val viewModel: MusicLibraryViewModel = viewModel(
       factory = MusicLibraryViewModel.factory(context.applicationContext as android.app.Application),
@@ -91,6 +93,14 @@ object MusicLibraryScreen : Screen {
 
     val musicLayoutMode by browserPreferences.musicLayoutMode.collectAsState()
     val musicCoverArtSize by browserPreferences.musicCoverArtSize.collectAsState()
+
+    val showVideoThumbnails by browserPreferences.showVideoThumbnails.collectAsState()
+    val unlimitedNameLines by appearancePreferences.unlimitedNameLines.collectAsState()
+    val showSizeChip by browserPreferences.showSizeChip.collectAsState()
+    val showResolutionChip by browserPreferences.showResolutionChip.collectAsState()
+    val showDateChip by browserPreferences.showDateChip.collectAsState()
+    val showProgressBar by browserPreferences.showProgressBar.collectAsState()
+    val showSubtitleIndicator by browserPreferences.showSubtitleIndicator.collectAsState()
 
     // ── Selection ──────────────────────────────────────────────────────────
     val selectionManager = rememberSelectionManager(
@@ -152,14 +162,14 @@ object MusicLibraryScreen : Screen {
       pageCount = { musicTabs.size }
     )
 
-    LaunchedEffect(pagerState.currentPage) {
-      if (pagerState.currentPage in musicTabs.indices) {
-        viewModel.selectTab(musicTabs[pagerState.currentPage])
+    LaunchedEffect(pagerState.settledPage) {
+      if (pagerState.settledPage in musicTabs.indices) {
+        viewModel.selectTab(musicTabs[pagerState.settledPage])
       }
     }
 
     LaunchedEffect(selectedTab) {
-      if (selectedTab.ordinal in musicTabs.indices && selectedTab.ordinal != pagerState.currentPage) {
+      if (selectedTab.ordinal in musicTabs.indices && selectedTab.ordinal != pagerState.settledPage) {
         pagerState.animateScrollToPage(selectedTab.ordinal)
       }
     }
@@ -195,6 +205,7 @@ object MusicLibraryScreen : Screen {
               modifier = Modifier
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface)
+                .statusBarsPadding()
                 .padding(horizontal = 12.dp, vertical = 8.dp)
             ) {
               TextField(
@@ -347,7 +358,7 @@ object MusicLibraryScreen : Screen {
                   MusicTab.ALBUMS -> AlbumGrid(albums = albums, layoutMode = musicLayoutMode, coverArtSize = musicCoverArtSize, onAlbumClick = { openAlbum = it })
                   MusicTab.ARTISTS -> ArtistList(artists = artists, layoutMode = musicLayoutMode, coverArtSize = musicCoverArtSize, onArtistClick = { openArtist = it })
                   MusicTab.FOLDERS -> FolderList(folders = folders, layoutMode = musicLayoutMode, coverArtSize = musicCoverArtSize, onFolderClick = { openFolder = it })
-                  MusicTab.PLAYLISTS -> PlaylistScreen.Content()
+                  MusicTab.PLAYLISTS -> PlaylistScreen.EmbeddedContent(searchQuery = searchQuery, layoutModeOverride = musicLayoutMode)
                 }
               }
             }
@@ -425,6 +436,43 @@ object MusicLibraryScreen : Screen {
         onLayoutModeChange = { browserPreferences.musicLayoutMode.set(it) },
         coverArtSize = musicCoverArtSize,
         onCoverArtSizeChange = { browserPreferences.musicCoverArtSize.set(it) },
+        visibilityToggles = listOf(
+          VisibilityToggle(
+            label = "Album Art",
+            checked = showVideoThumbnails,
+            onCheckedChange = { browserPreferences.showVideoThumbnails.set(it) },
+          ),
+          VisibilityToggle(
+            label = "Full Name",
+            checked = unlimitedNameLines,
+            onCheckedChange = { appearancePreferences.unlimitedNameLines.set(it) },
+          ),
+          VisibilityToggle(
+            label = "File Size",
+            checked = showSizeChip,
+            onCheckedChange = { browserPreferences.showSizeChip.set(it) },
+          ),
+          VisibilityToggle(
+            label = "Format",
+            checked = showResolutionChip,
+            onCheckedChange = { browserPreferences.showResolutionChip.set(it) },
+          ),
+          VisibilityToggle(
+            label = "Date",
+            checked = showDateChip,
+            onCheckedChange = { browserPreferences.showDateChip.set(it) },
+          ),
+          VisibilityToggle(
+            label = "Progress Bar",
+            checked = showProgressBar,
+            onCheckedChange = { browserPreferences.showProgressBar.set(it) },
+          ),
+          VisibilityToggle(
+            label = "Codec Indicator",
+            checked = showSubtitleIndicator,
+            onCheckedChange = { browserPreferences.showSubtitleIndicator.set(it) },
+          ),
+        )
       )
 
       DeleteConfirmationDialog(
@@ -457,6 +505,7 @@ object MusicLibraryScreen : Screen {
         videos    = selectionManager.getSelectedItems(),
         onDismiss = { addToPlaylistDialogOpen.value = false },
         onSuccess = { selectionManager.clear(); addToPlaylistDialogOpen.value = false },
+        isMusicContext = true,
       )
     }
   }
@@ -551,7 +600,7 @@ private fun AlbumGrid(
 
   if (layoutMode == MediaLayoutMode.GRID) {
     LazyVerticalGrid(
-      columns = GridCells.Adaptive(minSize = (coverArtSize).dp.coerceAtLeast(140.dp)),
+      columns = GridCells.Adaptive(minSize = (coverArtSize * 1.5f).dp.coerceAtLeast(100.dp)),
       modifier = Modifier.fillMaxSize(),
       contentPadding = PaddingValues(
         start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp + navBarHeight,
@@ -570,7 +619,7 @@ private fun AlbumGrid(
             Icon(
               Icons.Filled.Album,
               contentDescription = null,
-              modifier = Modifier.size((coverArtSize/2).dp).align(Alignment.CenterHorizontally),
+              modifier = Modifier.size((coverArtSize).dp).align(Alignment.CenterHorizontally),
               tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
@@ -615,7 +664,7 @@ private fun AlbumGrid(
             Icon(
               Icons.Filled.Album,
               contentDescription = null,
-              modifier = Modifier.size(coverArtSize.dp.coerceAtMost(64.dp)),
+              modifier = Modifier.size(coverArtSize.dp),
               tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Column(modifier = Modifier.padding(start = 12.dp)) {
@@ -660,7 +709,7 @@ private fun ArtistList(
 
   if (layoutMode == MediaLayoutMode.GRID) {
     LazyVerticalGrid(
-      columns = GridCells.Adaptive(minSize = (coverArtSize).dp.coerceAtLeast(140.dp)),
+      columns = GridCells.Adaptive(minSize = (coverArtSize * 1.5f).dp.coerceAtLeast(100.dp)),
       modifier = Modifier.fillMaxSize(),
       contentPadding = PaddingValues(
         start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp + navBarHeight,
@@ -679,7 +728,7 @@ private fun ArtistList(
             Icon(
               Icons.Filled.Person,
               contentDescription = null,
-              modifier = Modifier.size((coverArtSize/2).dp).align(Alignment.CenterHorizontally),
+              modifier = Modifier.size((coverArtSize).dp).align(Alignment.CenterHorizontally),
               tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text(
@@ -719,7 +768,7 @@ private fun ArtistList(
             Icon(
               Icons.Filled.Person,
               contentDescription = null,
-              modifier = Modifier.size(coverArtSize.dp.coerceAtMost(64.dp)),
+              modifier = Modifier.size(coverArtSize.dp),
               tint = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Column(modifier = Modifier.padding(start = 12.dp)) {
@@ -757,7 +806,7 @@ private fun FolderList(
 
   if (layoutMode == MediaLayoutMode.GRID) {
     LazyVerticalGrid(
-      columns = GridCells.Adaptive(minSize = (coverArtSize * 2.5f).dp.coerceAtLeast(140.dp)),
+      columns = GridCells.Adaptive(minSize = (coverArtSize * 1.5f).dp.coerceAtLeast(100.dp)),
       modifier = Modifier.fillMaxSize(),
       contentPadding = PaddingValues(
         start = 8.dp, end = 8.dp, top = 8.dp, bottom = 8.dp + navBarHeight,

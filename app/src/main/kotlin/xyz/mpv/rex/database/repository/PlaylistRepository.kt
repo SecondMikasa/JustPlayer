@@ -12,13 +12,14 @@ import kotlinx.coroutines.flow.Flow
 
 class PlaylistRepository(private val playlistDao: PlaylistDao) {
   // Playlist operations
-  suspend fun createPlaylist(name: String): Long {
+  suspend fun createPlaylist(name: String, isMusicPlaylist: Boolean = false): Long {
     val now = System.currentTimeMillis()
     return playlistDao.insertPlaylist(
       PlaylistEntity(
         name = name,
         createdAt = now,
         updatedAt = now,
+        isMusicPlaylist = isMusicPlaylist,
       ),
     )
   }

@@ -61,6 +61,7 @@ object MediaLibraryPreferencesScreen : Screen {
 
     val includeNoMediaContent by browserPreferences.includeNoMediaContent.collectAsState()
     val showAudioFiles by browserPreferences.showAudioFiles.collectAsState()
+    val showMusicPlaylistsInMainTab by browserPreferences.showMusicPlaylistsInMainTab.collectAsState()
     val libraryScanRoots by foldersPreferences.libraryScanRoots.collectAsState()
 
     Scaffold(
@@ -131,6 +132,22 @@ object MediaLibraryPreferencesScreen : Screen {
                 summary = {
                   Text(
                     text = stringResource(R.string.pref_show_audio_files_summary),
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
+
+              PreferenceDivider()
+
+              SwitchPreference(
+                value = showMusicPlaylistsInMainTab,
+                onValueChange = { newValue ->
+                  browserPreferences.showMusicPlaylistsInMainTab.set(newValue)
+                },
+                title = { Text(text = stringResource(R.string.pref_show_music_playlists_in_main_tab_title)) },
+                summary = {
+                  Text(
+                    text = stringResource(R.string.pref_show_music_playlists_in_main_tab_summary),
                     color = MaterialTheme.colorScheme.outline,
                   )
                 },

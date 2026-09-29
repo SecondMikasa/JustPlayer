@@ -188,8 +188,18 @@ fun AudioPlayerControls(
   val rawArtist       by MPVLib.propString["metadata/by-key/artist"].collectAsState()
   val rawAlbumArtist  by MPVLib.propString["metadata/by-key/album_artist"].collectAsState()
   val mediaTitle = activity.getTitleForControls()
-  val artist = rawArtist?.takeIf { it.isNotBlank() }
-    ?: rawAlbumArtist?.takeIf { it.isNotBlank() }
+  
+  var activeArtist by remember { mutableStateOf<String?>(null) }
+  
+  LaunchedEffect(currentPath, rawArtist, rawAlbumArtist) {
+    val directArtist = runCatching { MPVLib.getPropertyString("metadata/by-key/artist") }.getOrNull()
+    val directAlbumArtist = runCatching { MPVLib.getPropertyString("metadata/by-key/album_artist") }.getOrNull()
+    
+    activeArtist = directArtist?.takeIf { it.isNotBlank() }
+      ?: directAlbumArtist?.takeIf { it.isNotBlank() }
+  }
+  
+  val artist = activeArtist ?: "Unknown Artist"
   val artwork by viewModel.currentThumbnail.collectAsState()
   val artworkResolved = true // extracted eagerly in VM/Activity
 

@@ -39,7 +39,6 @@ enum class MusicSortField(val displayName: String) {
   ALBUM("Album"),
   DURATION("Duration"),
   DATE_ADDED("Date Added"),
-  YEAR("Year"),
 }
 
 @Immutable

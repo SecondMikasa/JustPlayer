@@ -75,6 +75,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
 @Composable
@@ -99,6 +100,7 @@ fun SortDialog(
   enableViewModeOptions: Boolean = true,
   enableLayoutModeOptions: Boolean = true,
   contentToggles: List<ContentToggle> = emptyList(),
+  additionalContent: @Composable (ColumnScope.() -> Unit)? = null,
 ) {
   if (!isOpen) return
 
@@ -186,6 +188,10 @@ fun SortDialog(
             toggles = visibilityToggles,
             modifier = Modifier.fillMaxWidth(),
           )
+        }
+
+        if (additionalContent != null) {
+          additionalContent()
         }
       }
     },
@@ -315,13 +321,14 @@ private fun SortTypeSelector(
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceEvenly,
-      verticalAlignment = Alignment.CenterVertically,
+      verticalAlignment = Alignment.Top,
     ) {
       types.forEachIndexed { index, type ->
         val selected = sortType == type
         val shape = RoundedCornerShape(16.dp)
 
         Column(
+          modifier = Modifier.weight(1f),
           horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -376,6 +383,8 @@ private fun SortTypeSelector(
               } else {
                 MaterialTheme.colorScheme.onSurface
               },
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
           )
         }
       }
@@ -407,13 +416,14 @@ private fun MultiViewModeSelectorComponent(
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceEvenly,
-      verticalAlignment = Alignment.CenterVertically,
+      verticalAlignment = Alignment.Top,
     ) {
       selector.options.forEach { option ->
         val selected = option.isSelected
         val shape = RoundedCornerShape(12.dp)
 
         Column(
+          modifier = Modifier.weight(1f),
           horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -463,6 +473,8 @@ private fun MultiViewModeSelectorComponent(
             } else {
               MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             },
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
           )
         }
       }
@@ -498,13 +510,14 @@ private fun ViewModeSelectorComponent(
     Row(
       modifier = Modifier.fillMaxWidth(),
       horizontalArrangement = Arrangement.SpaceEvenly,
-      verticalAlignment = Alignment.CenterVertically,
+      verticalAlignment = Alignment.Top,
     ) {
       options.forEachIndexed { index, label ->
         val selected = index == selectedIndex
         val shape = RoundedCornerShape(12.dp)
 
         Column(
+          modifier = Modifier.weight(1f),
           horizontalAlignment = Alignment.CenterHorizontally,
           verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -554,6 +567,8 @@ private fun ViewModeSelectorComponent(
             } else {
               MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
             },
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
           )
         }
       }

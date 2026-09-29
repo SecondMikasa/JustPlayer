@@ -20,6 +20,14 @@ class BrowserPreferences(
 
   val folderViewMode = preferenceStore.getEnum("folder_view_mode", FolderViewMode.AlbumView)
 
+  // Playlist sorting and layout preferences
+  val playlistSortType = preferenceStore.getEnum("playlist_sort_type", PlaylistSortType.Title)
+  val playlistSortOrder = preferenceStore.getEnum("playlist_sort_order", SortOrder.Ascending)
+  val playlistLayoutMode = preferenceStore.getEnum("playlist_layout_mode", MediaLayoutMode.LIST)
+
+  // Recently played layout preference
+  val recentlyPlayedLayoutMode = preferenceStore.getEnum("recently_played_layout_mode", MediaLayoutMode.LIST)
+
   private val isTablet = context.resources.configuration.smallestScreenWidthDp >= 600
   val folderGridColumnsPortrait = preferenceStore.getInt("folder_grid_columns_portrait", if (isTablet) 4 else 3)
   val folderGridColumnsLandscape = preferenceStore.getInt("folder_grid_columns_landscape", 5)
@@ -72,6 +80,8 @@ class BrowserPreferences(
   val musicSortOrder = preferenceStore.getEnum("music_sort_order", xyz.mpv.rex.domain.media.model.MusicSortOrder.ASCENDING)
   val musicLayoutMode = preferenceStore.getEnum("music_layout_mode", MediaLayoutMode.LIST)
   val musicCoverArtSize = preferenceStore.getInt("music_cover_art_size", 56)
+  // Whether music playlists (created via the Music tab) appear in the main Playlists tab
+  val showMusicPlaylistsInMainTab = preferenceStore.getBoolean("show_music_playlists_in_main_tab", true)
 
   companion object {
     const val TAB_HOME = "home"
@@ -175,4 +185,21 @@ enum class MediaLayoutMode {
       LIST -> "List"
       GRID -> "Grid"
     }
+}
+
+enum class PlaylistSortType {
+  Title,
+  DateCreated,
+  DateUpdated,
+  ItemCount,
+  ;
+
+  val displayName: String
+    get() =
+      when (this) {
+        Title -> "Title"
+        DateCreated -> "Date Created"
+        DateUpdated -> "Date Updated"
+        ItemCount -> "Item Count"
+      }
 }

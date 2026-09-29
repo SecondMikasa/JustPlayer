@@ -20,11 +20,8 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.FileOpen
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -39,12 +36,11 @@ import androidx.compose.material3.TooltipBox
 import androidx.compose.material3.TooltipDefaults
 import androidx.compose.material3.animateFloatingActionButton
 import androidx.compose.material3.rememberTooltipState
-import androidx.compose.runtime.Composable
+import androidx.compose.runtime.*
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.res.pluralStringResource
 import xyz.mpv.rex.R
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -142,8 +138,11 @@ object RecentlyPlayedScreen : Screen {
     // Track scroll for FAB visibility - create states here to pass to content
     val listState = remember { LazyListState() }
     val gridState = remember { LazyGridState() }
-    val browserPreferences = koinInject<BrowserPreferences>()
-    val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
+    val mediaLayoutMode by viewModel.recentlyPlayedLayoutMode.collectAsState()
+    val gridColumnsPortrait by viewModel.gridColumnsPortrait.collectAsState()
+    val gridColumnsLandscape by viewModel.gridColumnsLandscape.collectAsState()
+    
+    val sortDialogOpen = rememberSaveable { mutableStateOf(false) }
     xyz.mpv.rex.ui.browser.fab.FabScrollHelper.trackScrollForFabVisibility(
       listState = listState,
       gridState = if (mediaLayoutMode == MediaLayoutMode.GRID) gridState else null,
@@ -175,7 +174,7 @@ object RecentlyPlayedScreen : Screen {
             totalCount = recentItems.size,
             onBackClick = null, // No back button for recently played screen
             onCancelSelection = { selectionManager.clear() },
-            onSortClick = null, // No sorting in recently played
+            onSortClick = { sortDialogOpen.value = true },
             onSettingsClick = {
               backStack.add(xyz.mpv.rex.ui.preferences.PreferencesScreen)
             },
@@ -272,6 +271,7 @@ object RecentlyPlayedScreen : Screen {
             uiSettings = uiSettings,
             recentlyPlayedFilePath = recentlyPlayedFilePath,
             selectionManager = selectionManager,
+            mediaLayoutMode = mediaLayoutMode,
             onVideoClick = { video ->
               // Always play individual videos without creating a playlist
               // regardless of playlist mode setting
@@ -289,6 +289,34 @@ object RecentlyPlayedScreen : Screen {
             onRefresh = { viewModel.refresh() }
           )
         }
+      }
+
+      // Sort/Layout Dialog
+      if (sortDialogOpen.value) {
+        xyz.mpv.rex.ui.browser.dialogs.SortDialog(
+          isOpen = sortDialogOpen.value,
+          onDismiss = { sortDialogOpen.value = false },
+          title = stringResource(R.string.view_mode),
+          sortType = "",
+          onSortTypeChange = { },
+          sortOrderAsc = true,
+          onSortOrderChange = { },
+          types = emptyList(),
+          icons = emptyList(),
+          getLabelForType = { _, _ -> Pair("", "") },
+          showSortOptions = false,
+          layoutModeSelector = xyz.mpv.rex.ui.browser.dialogs.ViewModeSelector(
+            label = stringResource(R.string.view_options),
+            firstOptionLabel = stringResource(R.string.list),
+            secondOptionLabel = stringResource(R.string.grid),
+            firstOptionIcon = Icons.AutoMirrored.Filled.ViewList,
+            secondOptionIcon = Icons.Filled.GridView,
+            isFirstOptionSelected = mediaLayoutMode == MediaLayoutMode.LIST,
+            onViewModeChange = { isList ->
+              viewModel.setLayoutMode(if (isList) MediaLayoutMode.LIST else MediaLayoutMode.GRID)
+            }
+          ),
+        )
       }
 
       // Delete confirmation dialog
@@ -356,6 +384,7 @@ private fun RecentItemsContent(
   selectionManager: xyz.mpv.rex.ui.browser.selection.SelectionManager<RecentlyPlayedItem, String>,
   onVideoClick: (Video) -> Unit,
   onPlaylistClick: suspend (RecentlyPlayedItem.PlaylistItem) -> Unit,
+  mediaLayoutMode: MediaLayoutMode,
   modifier: Modifier = Modifier,
   isInSelectionMode: Boolean = false,
   listState: LazyListState,
@@ -390,5 +419,6 @@ private fun RecentItemsContent(
     isInSelectionMode = isInSelectionMode,
     listState = listState,
     gridState = gridState,
+    layoutModeOverride = mediaLayoutMode,
   )
 }

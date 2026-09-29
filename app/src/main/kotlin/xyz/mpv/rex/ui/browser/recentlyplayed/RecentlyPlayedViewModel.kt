@@ -14,6 +14,8 @@ import xyz.mpv.rex.database.repository.PlaylistRepository
 import xyz.mpv.rex.database.repository.VideoMetadataCacheRepository
 import xyz.mpv.rex.domain.media.model.Video
 import xyz.mpv.rex.domain.recentlyplayed.repository.RecentlyPlayedRepository
+import xyz.mpv.rex.preferences.BrowserPreferences
+import xyz.mpv.rex.preferences.MediaLayoutMode
 import xyz.mpv.rex.ui.browser.base.BaseBrowserViewModel
 import xyz.mpv.rex.utils.media.MediaFormatter
 import xyz.mpv.rex.utils.permission.PermissionUtils
@@ -32,8 +34,12 @@ class RecentlyPlayedViewModel(application: Application) :
   
   private val recentlyPlayedRepository by inject<RecentlyPlayedRepository>()
   private val playlistRepository by inject<PlaylistRepository>()
+  private val browserPreferences by inject<BrowserPreferences>()
 
   val recentItems: StateFlow<List<RecentlyPlayedItem>> = items
+  val recentlyPlayedLayoutMode = browserPreferences.recentlyPlayedLayoutMode.stateIn(viewModelScope)
+  val gridColumnsPortrait = browserPreferences.folderGridColumnsPortrait.stateIn(viewModelScope)
+  val gridColumnsLandscape = browserPreferences.folderGridColumnsLandscape.stateIn(viewModelScope)
 
   // Keep for backward compatibility
   private val _recentVideos = MutableStateFlow<List<Video>>(emptyList())
@@ -223,6 +229,10 @@ class RecentlyPlayedViewModel(application: Application) :
       Log.e("RecentlyPlayedViewModel", "Error deleting items from history", e)
       Pair(0, itemsToDelete.size)
     }
+  }
+
+  fun setLayoutMode(mode: MediaLayoutMode) {
+    browserPreferences.recentlyPlayedLayoutMode.set(mode)
   }
 
   companion object {

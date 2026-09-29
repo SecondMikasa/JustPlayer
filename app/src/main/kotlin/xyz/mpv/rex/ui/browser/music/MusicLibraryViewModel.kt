@@ -76,7 +76,6 @@ class MusicLibraryViewModel(
         MusicSortField.ALBUM -> filtered.sortedBy { it.album.lowercase() }
         MusicSortField.DURATION -> filtered.sortedBy { it.duration }
         MusicSortField.DATE_ADDED -> filtered.sortedBy { it.dateAdded }
-        MusicSortField.YEAR -> filtered.sortedBy { it.year }
       }
       if (order == MusicSortOrder.DESCENDING) sorted.reversed() else sorted
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -104,7 +103,6 @@ class MusicLibraryViewModel(
       when (field) {
         MusicSortField.TITLE -> alb.sortedBy { it.title.lowercase() }
         MusicSortField.ARTIST -> alb.sortedBy { it.artist.lowercase() }
-        MusicSortField.YEAR -> alb.sortedBy { it.year }
         else -> alb.sortedBy { it.title.lowercase() }
       }
     }.combine(sortOrder) { alb, order ->

@@ -233,7 +233,20 @@ fun PlayerControls(
   val isGestureSeeking by viewModel.isGestureSeeking.collectAsState()
   val isVerticalGestureActive by viewModel.isVerticalGestureActive.collectAsState()
 
+  val context = LocalContext.current
+  val view = androidx.compose.ui.platform.LocalView.current
+
   LaunchedEffect(controlsShown) {
+    val window = (context as? android.app.Activity)?.window
+    if (window != null) {
+      val controller = androidx.core.view.WindowCompat.getInsetsController(window, view)
+      if (controlsShown) {
+        controller.show(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+      } else {
+        controller.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
+      }
+    }
+
     if (controlsShown) {
       val hasActiveSubtitle = (MPVLib.getPropertyInt("sid") ?: 0) != 0
       if (hasActiveSubtitle && playerTutorialManager.shouldShowSubtitleDragHint()) {

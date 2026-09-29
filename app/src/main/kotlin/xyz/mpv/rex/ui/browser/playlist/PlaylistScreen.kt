@@ -1,92 +1,49 @@
 package xyz.mpv.rex.ui.browser.playlist
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.ExtendedFloatingActionButton
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.PlainTooltip
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SearchBar
-import androidx.compose.material3.SearchBarDefaults
-import androidx.compose.material3.Text
-import androidx.compose.material3.TooltipAnchorPosition
-import androidx.compose.material3.TooltipBox
-import androidx.compose.material3.TooltipDefaults
-import androidx.compose.material3.animateFloatingActionButton
-import androidx.compose.material3.rememberTooltipState
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.res.stringResource
-import xyz.mpv.rex.R
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import xyz.mpv.rex.R
 import xyz.mpv.rex.database.repository.PlaylistRepository
 import xyz.mpv.rex.preferences.BrowserPreferences
 import xyz.mpv.rex.preferences.MediaLayoutMode
+import xyz.mpv.rex.preferences.PlaylistSortType
+import xyz.mpv.rex.preferences.SortOrder
 import xyz.mpv.rex.preferences.UiSettings
-import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
-import xyz.mpv.rex.presentation.components.pullrefresh.PullRefreshBox
-import xyz.mpv.rex.ui.browser.cards.PlaylistCard
 import xyz.mpv.rex.ui.browser.components.BrowserTopBar
 import xyz.mpv.rex.ui.browser.components.UnifiedExplorerContent
 import xyz.mpv.rex.ui.browser.dialogs.DeleteConfirmationDialog
+import xyz.mpv.rex.ui.browser.dialogs.SortDialog
+import xyz.mpv.rex.ui.browser.dialogs.ViewModeSelector
 import xyz.mpv.rex.ui.browser.selection.rememberSelectionManager
+import xyz.mpv.rex.ui.browser.selection.SelectionManager
 import xyz.mpv.rex.ui.browser.sheets.PlaylistActionSheet
 import xyz.mpv.rex.ui.browser.states.EmptyState
 import xyz.mpv.rex.ui.utils.LocalBackStack
 import kotlinx.coroutines.launch
 import kotlinx.serialization.Serializable
-import my.nanihadesuka.compose.LazyColumnScrollbar
-import my.nanihadesuka.compose.LazyVerticalGridScrollbar
-import my.nanihadesuka.compose.ScrollbarSettings
 import org.koin.compose.koinInject
 
 @Serializable
@@ -94,9 +51,20 @@ object PlaylistScreen : Screen {
   @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
   @Composable
   override fun Content() {
+    InternalContent(isEmbedded = false, externalSearchQuery = "")
+  }
+
+  @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+  @Composable
+  fun EmbeddedContent(searchQuery: String = "", layoutModeOverride: MediaLayoutMode? = null) {
+    InternalContent(isEmbedded = true, externalSearchQuery = searchQuery, layoutModeOverride = layoutModeOverride)
+  }
+
+  @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+  @Composable
+  private fun InternalContent(isEmbedded: Boolean, externalSearchQuery: String, layoutModeOverride: MediaLayoutMode? = null) {
     val context = LocalContext.current
     val repository = koinInject<PlaylistRepository>()
-    val browserPreferences = koinInject<BrowserPreferences>()
     val backStack = LocalBackStack.current
     val scope = rememberCoroutineScope()
 
@@ -106,20 +74,22 @@ object PlaylistScreen : Screen {
     )
 
     val playlistsWithCount by viewModel.playlistsWithCount.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
     val uiSettings by viewModel.uiSettings.collectAsState()
     val hasCompletedInitialLoad by viewModel.hasCompletedInitialLoad.collectAsState()
 
     // Search state
-    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var localSearchQuery by rememberSaveable { mutableStateOf("") }
     var isSearching by rememberSaveable { mutableStateOf(false) }
     val keyboardController = LocalSoftwareKeyboardController.current
     val focusRequester = remember { FocusRequester() }
 
+    val activeSearchQuery = if (isEmbedded) externalSearchQuery else localSearchQuery
+    val isSearchActive = if (isEmbedded) externalSearchQuery.isNotBlank() else (isSearching && localSearchQuery.isNotBlank())
+
     // Filter playlists based on search query
-    val filteredPlaylists = if (isSearching && searchQuery.isNotBlank()) {
+    val filteredPlaylists = if (isSearchActive) {
       playlistsWithCount.filter { playlistWithCount ->
-        playlistWithCount.playlist.name.contains(searchQuery, ignoreCase = true)
+        playlistWithCount.playlist.name.contains(activeSearchQuery, ignoreCase = true)
       }
     } else {
       playlistsWithCount
@@ -127,7 +97,7 @@ object PlaylistScreen : Screen {
 
     // Request focus when search is activated
     LaunchedEffect(isSearching) {
-      if (isSearching) {
+      if (!isEmbedded && isSearching) {
         focusRequester.requestFocus()
         keyboardController?.show()
       }
@@ -153,7 +123,11 @@ object PlaylistScreen : Screen {
     // Use the remembered states
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
-    val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
+    val sortType by viewModel.playlistSortType.collectAsState()
+    val sortOrder by viewModel.playlistSortOrder.collectAsState()
+    val mediaLayoutMode = layoutModeOverride ?: viewModel.playlistLayoutMode.collectAsState().value
+    
+    val sortDialogOpen = rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
       xyz.mpv.rex.ui.browser.MainScreen.scrollToTopRequest.collect { tabId ->
@@ -178,11 +152,11 @@ object PlaylistScreen : Screen {
     val isFabVisible = remember { mutableStateOf(true) }
 
     // Predictive back: Intercept when in selection mode or searching
-    BackHandler(enabled = selectionManager.isInSelectionMode || isSearching) {
+    BackHandler(enabled = selectionManager.isInSelectionMode || (!isEmbedded && isSearching)) {
       when {
-        isSearching -> {
+        !isEmbedded && isSearching -> {
           isSearching = false
-          searchQuery = ""
+          localSearchQuery = ""
         }
 
         selectionManager.isInSelectionMode -> selectionManager.clear()
@@ -200,70 +174,73 @@ object PlaylistScreen : Screen {
 
     Scaffold(
         topBar = {
-          if (isSearching) {
-            // Search mode - show search bar
-            SearchBar(
-              inputField = {
-                SearchBarDefaults.InputField(
-                  query = searchQuery,
-                  onQueryChange = { searchQuery = it },
-                  onSearch = { },
-                  expanded = false,
-                  onExpandedChange = { },
-                  placeholder = { Text(stringResource(R.string.search_playlists)) },
-                  leadingIcon = {
-                    Icon(
-                      imageVector = Icons.Filled.Search,
-                      contentDescription = stringResource(R.string.search_empty_title),
-                    )
-                  },
-                  trailingIcon = {
-                    IconButton(
-                      onClick = {
-                        isSearching = false
-                        searchQuery = ""
-                      },
-                    ) {
+          if (!isEmbedded || selectionManager.isInSelectionMode) {
+            if (isSearching && !isEmbedded) {
+              // Search mode - show search bar
+              SearchBar(
+                inputField = {
+                  SearchBarDefaults.InputField(
+                    query = localSearchQuery,
+                    onQueryChange = { localSearchQuery = it },
+                    onSearch = { },
+                    expanded = false,
+                    onExpandedChange = { },
+                    placeholder = { Text(stringResource(R.string.search_playlists)) },
+                    leadingIcon = {
                       Icon(
-                        imageVector = Icons.Filled.Close,
-                        contentDescription = stringResource(R.string.generic_cancel),
+                        imageVector = Icons.Filled.Search,
+                        contentDescription = stringResource(R.string.search_empty_title),
                       )
-                    }
-                  },
-                  modifier = Modifier.focusRequester(focusRequester),
-                )
-              },
-              expanded = false,
-              onExpandedChange = { },
-              modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-              shape = RoundedCornerShape(28.dp),
-              tonalElevation = 6.dp,
-            ) {
-              // Empty content for SearchBar
+                    },
+                    trailingIcon = {
+                      IconButton(
+                        onClick = {
+                          isSearching = false
+                          localSearchQuery = ""
+                        },
+                      ) {
+                        Icon(
+                          imageVector = Icons.Filled.Close,
+                          contentDescription = stringResource(R.string.generic_cancel),
+                        )
+                      }
+                    },
+                    modifier = Modifier.focusRequester(focusRequester),
+                  )
+                },
+                expanded = false,
+                onExpandedChange = { },
+                modifier = Modifier
+                  .fillMaxWidth()
+                  .padding(horizontal = 16.dp, vertical = 8.dp),
+                shape = RoundedCornerShape(28.dp),
+                tonalElevation = 6.dp,
+              ) {
+                // Empty content for SearchBar
+              }
+            } else {
+              BrowserTopBar(
+                title = stringResource(R.string.playlists),
+                isInSelectionMode = selectionManager.isInSelectionMode,
+                selectedCount = selectionManager.selectedCount,
+                totalCount = filteredPlaylists.size,
+                onBackClick = null,
+                onCancelSelection = { selectionManager.clear() },
+                isSingleSelection = selectionManager.isSingleSelection,
+                onSearchClick = { isSearching = true },
+                onSortClick = { sortDialogOpen.value = true },
+                onSettingsClick = {
+                  backStack.add(xyz.mpv.rex.ui.preferences.PreferencesScreen)
+                },
+                onRenameClick = if (selectionManager.isSingleSelection) {
+                  { showRenameDialog = true }
+                } else null,
+                onDeleteClick = { showDeleteDialog = true },
+                onSelectAll = { selectionManager.selectAll() },
+                onInvertSelection = { selectionManager.invertSelection() },
+                onDeselectAll = { selectionManager.clear() },
+              )
             }
-          } else {
-            BrowserTopBar(
-              title = stringResource(R.string.playlists),
-              isInSelectionMode = selectionManager.isInSelectionMode,
-              selectedCount = selectionManager.selectedCount,
-              totalCount = playlistsWithCount.size,
-              onBackClick = null,
-              onCancelSelection = { selectionManager.clear() },
-              isSingleSelection = selectionManager.isSingleSelection,
-              onSearchClick = { isSearching = true },
-              onSettingsClick = {
-                backStack.add(xyz.mpv.rex.ui.preferences.PreferencesScreen)
-              },
-              onRenameClick = if (selectionManager.isSingleSelection) {
-                { showRenameDialog = true }
-              } else null,
-              onDeleteClick = { showDeleteDialog = true },
-              onSelectAll = { selectionManager.selectAll() },
-              onInvertSelection = { selectionManager.invertSelection() },
-              onDeselectAll = { selectionManager.clear() },
-            )
           }
         },
         floatingActionButton = {
@@ -278,7 +255,7 @@ object PlaylistScreen : Screen {
           }
         }
       ) { paddingValues ->
-        if (isSearching && filteredPlaylists.isEmpty() && searchQuery.isNotBlank()) {
+        if (isSearchActive && filteredPlaylists.isEmpty() && activeSearchQuery.isNotBlank()) {
           // Show "no results" for search
           Box(
             modifier = Modifier
@@ -319,6 +296,7 @@ object PlaylistScreen : Screen {
             isRefreshing = isRefreshing,
             onRefresh = { viewModel.refresh() },
             selectionManager = selectionManager,
+            mediaLayoutMode = mediaLayoutMode,
             onPlaylistClick = { playlistWithCount ->
               if (selectionManager.isInSelectionMode) {
                 selectionManager.toggle(playlistWithCount)
@@ -335,7 +313,17 @@ object PlaylistScreen : Screen {
         }
       }
 
-      // Create playlist and M3U playlist dialogs moved to MainScreen
+      // Sort Dialog
+      PlaylistSortDialog(
+        isOpen = sortDialogOpen.value,
+        onDismiss = { sortDialogOpen.value = false },
+        sortType = sortType,
+        sortOrder = sortOrder,
+        layoutMode = mediaLayoutMode,
+        onSortTypeChange = { viewModel.setSortType(it) },
+        onSortOrderChange = { viewModel.setSortOrder(it) },
+        onLayoutModeChange = { viewModel.setLayoutMode(it) }
+      )
 
       // Playlist action sheets
       PlaylistActionSheet(
@@ -362,11 +350,11 @@ object PlaylistScreen : Screen {
             focusRequester.requestFocus()
           }
 
-          androidx.compose.material3.AlertDialog(
+          AlertDialog(
             onDismissRequest = { showRenameDialog = false },
             title = { Text(stringResource(R.string.rename_playlist)) },
             text = {
-              androidx.compose.material3.OutlinedTextField(
+              OutlinedTextField(
                 value = playlistName,
                 onValueChange = { playlistName = it },
                 label = { Text(stringResource(R.string.playlist_name)) },
@@ -378,7 +366,7 @@ object PlaylistScreen : Screen {
               )
             },
             confirmButton = {
-              androidx.compose.material3.TextButton(
+              TextButton(
                 onClick = {
                   if (playlistName.text.isNotBlank()) {
                     scope.launch {
@@ -394,7 +382,7 @@ object PlaylistScreen : Screen {
               }
             },
             dismissButton = {
-              androidx.compose.material3.TextButton(
+              TextButton(
                 onClick = { showRenameDialog = false },
               ) {
                 Text(stringResource(R.string.generic_cancel))
@@ -418,7 +406,6 @@ object PlaylistScreen : Screen {
         )
       }
     }
-  }
 
   @Composable
   private fun PlaylistListContent(
@@ -426,11 +413,12 @@ object PlaylistScreen : Screen {
     listState: LazyListState,
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     uiSettings: UiSettings,
-    isRefreshing: androidx.compose.runtime.MutableState<Boolean>,
+    isRefreshing: MutableState<Boolean>,
     onRefresh: suspend () -> Unit,
-    selectionManager: xyz.mpv.rex.ui.browser.selection.SelectionManager<PlaylistWithCount, Int>,
+    selectionManager: SelectionManager<PlaylistWithCount, Int>,
     onPlaylistClick: (PlaylistWithCount) -> Unit,
     onPlaylistLongClick: (PlaylistWithCount) -> Unit,
+    mediaLayoutMode: MediaLayoutMode,
     modifier: Modifier = Modifier,
     isInSelectionMode: Boolean = false,
   ) {
@@ -450,5 +438,62 @@ object PlaylistScreen : Screen {
       isInSelectionMode = isInSelectionMode,
       listState = listState,
       gridState = gridState,
+      layoutModeOverride = mediaLayoutMode,
     )
   }
+}
+
+@Composable
+fun PlaylistSortDialog(
+  isOpen: Boolean,
+  onDismiss: () -> Unit,
+  sortType: PlaylistSortType,
+  sortOrder: SortOrder,
+  layoutMode: MediaLayoutMode,
+  onSortTypeChange: (PlaylistSortType) -> Unit,
+  onSortOrderChange: (SortOrder) -> Unit,
+  onLayoutModeChange: (MediaLayoutMode) -> Unit,
+) {
+  SortDialog(
+    isOpen = isOpen,
+    onDismiss = onDismiss,
+    title = stringResource(R.string.sort_and_view_options),
+    sortType = sortType.displayName,
+    onSortTypeChange = { newType ->
+      PlaylistSortType.entries
+        .find { it.displayName == newType }
+        ?.let(onSortTypeChange)
+    },
+    sortOrderAsc = sortOrder == SortOrder.Ascending,
+    onSortOrderChange = { asc ->
+      onSortOrderChange(if (asc) SortOrder.Ascending else SortOrder.Descending)
+    },
+    types = PlaylistSortType.entries.map { it.displayName },
+    icons = listOf(
+      Icons.Filled.Title,
+      Icons.Filled.CalendarToday,
+      Icons.Filled.AccessTime,
+      Icons.AutoMirrored.Filled.ViewList,
+    ),
+    getLabelForType = { type, _ ->
+      when (type) {
+        PlaylistSortType.Title.displayName -> Pair("A-Z", "Z-A")
+        PlaylistSortType.DateCreated.displayName -> Pair("Oldest", "Newest")
+        PlaylistSortType.DateUpdated.displayName -> Pair("Oldest", "Newest")
+        PlaylistSortType.ItemCount.displayName -> Pair("Smallest", "Largest")
+        else -> Pair(type, type)
+      }
+    },
+    layoutModeSelector = ViewModeSelector(
+      label = "Layout",
+      firstOptionLabel = stringResource(R.string.list),
+      secondOptionLabel = stringResource(R.string.grid),
+      firstOptionIcon = Icons.AutoMirrored.Filled.ViewList,
+      secondOptionIcon = Icons.Filled.GridView,
+      isFirstOptionSelected = layoutMode == MediaLayoutMode.LIST,
+      onViewModeChange = { isList ->
+        onLayoutModeChange(if (isList) MediaLayoutMode.LIST else MediaLayoutMode.GRID)
+      }
+    ),
+  )
+}

@@ -82,11 +82,13 @@ fun <T> UnifiedExplorerContent(
   onReorder: ((Int, Int) -> Unit)? = null,
   listState: LazyListState? = null,
   gridState: LazyGridState? = null,
+  layoutModeOverride: MediaLayoutMode? = null,
 ) {
   val browserPreferences = koinInject<BrowserPreferences>()
   val gesturePreferences = koinInject<GesturePreferences>()
 
-  val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
+  val mediaLayoutModeFromPrefs by browserPreferences.mediaLayoutMode.collectAsState()
+  val mediaLayoutMode = layoutModeOverride ?: mediaLayoutModeFromPrefs
   val folderGridColumnsPortrait by browserPreferences.folderGridColumnsPortrait.collectAsState()
   val folderGridColumnsLandscape by browserPreferences.folderGridColumnsLandscape.collectAsState()
   val videoGridColumnsPortrait by browserPreferences.videoGridColumnsPortrait.collectAsState()

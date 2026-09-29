@@ -61,6 +61,7 @@ fun AddToPlaylistDialog(
   onDismiss: () -> Unit,
   onSuccess: () -> Unit,
   modifier: Modifier = Modifier,
+  isMusicContext: Boolean = false,
 ) {
   val repository = koinInject<PlaylistRepository>()
   val playlistsFromDb by repository.observeAllPlaylists().collectAsState(initial = emptyList())
@@ -78,7 +79,7 @@ fun AddToPlaylistDialog(
       onDismiss = { showCreateDialog = false },
       onConfirm = { name ->
         scope.launch {
-          val playlistId = repository.createPlaylist(name)
+          val playlistId = repository.createPlaylist(name, isMusicPlaylist = isMusicContext)
           val items = videos.map { video ->
             video.path to video.displayName
           }

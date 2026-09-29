@@ -8,6 +8,10 @@ import androidx.lifecycle.viewModelScope
 import xyz.mpv.rex.database.entities.PlaylistEntity
 import xyz.mpv.rex.database.repository.PlaylistRepository
 import xyz.mpv.rex.repository.MediaFileRepository
+import xyz.mpv.rex.preferences.BrowserPreferences
+import xyz.mpv.rex.preferences.PlaylistSortType
+import xyz.mpv.rex.preferences.SortOrder
+import xyz.mpv.rex.preferences.MediaLayoutMode
 import xyz.mpv.rex.ui.browser.base.BaseBrowserViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -29,8 +33,15 @@ class PlaylistViewModel(
 ) : BaseBrowserViewModel<PlaylistWithCount>(application),
   KoinComponent {
   private val repository: PlaylistRepository by inject()
+  private val browserPreferences: BrowserPreferences by inject()
 
   val playlistsWithCount: StateFlow<List<PlaylistWithCount>> = items
+
+  val playlistSortType = browserPreferences.playlistSortType.stateIn(viewModelScope)
+  val playlistSortOrder = browserPreferences.playlistSortOrder.stateIn(viewModelScope)
+  val playlistLayoutMode = browserPreferences.playlistLayoutMode.stateIn(viewModelScope)
+  val gridColumnsPortrait = browserPreferences.folderGridColumnsPortrait.stateIn(viewModelScope)
+  val gridColumnsLandscape = browserPreferences.folderGridColumnsLandscape.stateIn(viewModelScope)
 
   // Track if initial load has completed to prevent empty state flicker
   private val _hasCompletedInitialLoad = MutableStateFlow(false)
@@ -51,7 +62,14 @@ class PlaylistViewModel(
 
     // Observe all playlists and update items
     viewModelScope.launch(Dispatchers.IO) {
-      repository.observeAllPlaylists().collectLatest { playlists ->
+      repository.observeAllPlaylists().collectLatest {
+        loadData()
+      }
+    }
+
+    // Observe music playlist integration preference
+    viewModelScope.launch(Dispatchers.IO) {
+      browserPreferences.showMusicPlaylistsInMainTab.changes().collectLatest {
         loadData()
       }
     }
@@ -62,12 +80,30 @@ class PlaylistViewModel(
       _isLoading.value = true
       try {
         val playlists = repository.getAllPlaylists()
-        val playlistsWithCounts = playlists.map { playlist ->
+        
+        val currentSortType = browserPreferences.playlistSortType.get()
+        val currentSortOrder = browserPreferences.playlistSortOrder.get()
+        val showMusicPlaylists = browserPreferences.showMusicPlaylistsInMainTab.get()
+
+        // Filter out music playlists if the user toggled them off
+        val filteredPlaylists = if (showMusicPlaylists) playlists
+          else playlists.filter { !it.isMusicPlaylist }
+
+        val playlistsWithCounts = filteredPlaylists.map { playlist ->
           val count = repository.getPlaylistItemCount(playlist.id)
           PlaylistWithCount(playlist, count)
-        }.sortedByDescending { it.playlist.updatedAt }
+        }
+        
+        val sortedList = when (currentSortType) {
+          PlaylistSortType.Title -> playlistsWithCounts.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.playlist.name })
+          PlaylistSortType.DateCreated -> playlistsWithCounts.sortedBy { it.playlist.createdAt }
+          PlaylistSortType.DateUpdated -> playlistsWithCounts.sortedBy { it.playlist.updatedAt }
+          PlaylistSortType.ItemCount -> playlistsWithCounts.sortedBy { it.itemCount }
+        }.let {
+          if (currentSortOrder == SortOrder.Descending) it.reversed() else it
+        }
 
-        _items.value = playlistsWithCounts
+        _items.value = sortedList
         _hasCompletedInitialLoad.value = true
       } finally {
         _isLoading.value = false
@@ -88,5 +124,25 @@ class PlaylistViewModel(
       repository.deletePlaylist(it.playlist)
     }
     loadData()
+  }
+
+  fun setSortType(type: PlaylistSortType) {
+    if (browserPreferences.playlistSortType.get() == type) {
+      val newOrder = if (browserPreferences.playlistSortOrder.get() == SortOrder.Ascending) SortOrder.Descending else SortOrder.Ascending
+      browserPreferences.playlistSortOrder.set(newOrder)
+    } else {
+      browserPreferences.playlistSortType.set(type)
+      browserPreferences.playlistSortOrder.set(SortOrder.Ascending)
+    }
+    loadData()
+  }
+
+  fun setSortOrder(order: SortOrder) {
+    browserPreferences.playlistSortOrder.set(order)
+    loadData()
+  }
+
+  fun setLayoutMode(mode: MediaLayoutMode) {
+    browserPreferences.playlistLayoutMode.set(mode)
   }
 }
