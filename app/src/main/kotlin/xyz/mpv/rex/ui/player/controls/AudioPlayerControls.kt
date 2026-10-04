@@ -246,8 +246,8 @@ fun AudioPlayerControls(
   // Show the system status bar and navigation bar while the audio player is visible,
   // and restore the video-player fullscreen state when it is disposed.
   val view = LocalView.current
-  DisposableEffect(view) {
-    val window = (view.context as? android.app.Activity)?.window
+  DisposableEffect(view, activity) {
+    val window = activity.window
     if (window != null) {
       // Drop FLAG_LAYOUT_NO_LIMITS so the system can push insets into our layout when the
       // notification shade is pulled down (status bar expanding moves the UI downward).
@@ -1132,6 +1132,7 @@ fun AudioPlayerControls(
 
   // ── Full-screen loading overlay to prevent thumbnail/cover flash ───────
   val isLoading by viewModel.isLoading.collectAsState()
+  val isSpinnerVisible by viewModel.isSpinnerVisible.collectAsState()
   val showLoadingCircle by playerPrefs.showLoadingCircle.collectAsState()
 
   AnimatedVisibility(
@@ -1145,7 +1146,7 @@ fun AudioPlayerControls(
         .background(Color.Black),
       contentAlignment = Alignment.Center
     ) {
-      if (showLoadingCircle) {
+      if (showLoadingCircle && isSpinnerVisible) {
         LoadingIndicator(modifier = Modifier.size(96.dp))
       }
     }

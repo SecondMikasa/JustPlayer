@@ -167,6 +167,10 @@ class PlayerViewModel(
   private val _isLoading = MutableStateFlow(true)
   val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+  // Controls only the spinner circle — shown after a delay so fast-loading files skip it
+  private val _isSpinnerVisible = MutableStateFlow(false)
+  val isSpinnerVisible: StateFlow<Boolean> = _isSpinnerVisible.asStateFlow()
+
   fun setIsAudioMedia(isAudio: Boolean) {
     _isAudioMedia.value = isAudio
   }
@@ -719,6 +723,7 @@ class PlayerViewModel(
   }
 
   private var clearLoadingJob: kotlinx.coroutines.Job? = null
+  private var showLoadingJob: kotlinx.coroutines.Job? = null
 
   fun resetExternalAudioTracks() {
     synchronized(_externalAudioTracks) {
@@ -729,7 +734,10 @@ class PlayerViewModel(
 
   fun prepareForFileLoad(initialDurationSec: Float? = null) {
     clearLoadingJob?.cancel()
+    showLoadingJob?.cancel()
+    // Immediately show the black overlay to block any previous video frame leaking
     _isLoading.value = true
+    _isSpinnerVisible.value = true
     resetExternalAudioTracks()
     _precisePosition.value = 0f
     if (initialDurationSec != null && initialDurationSec > 0f) {
@@ -743,7 +751,11 @@ class PlayerViewModel(
 
   fun onFileStartLoading() {
     clearLoadingJob?.cancel()
+    showLoadingJob?.cancel()
+    // Immediately show black overlay — no frame leak
     _isLoading.value = true
+    _isSpinnerVisible.value = true
+
     if (_externalAudioTracks.isEmpty()) {
       _precisePosition.value = 0f
       if (_primaryVideoDuration.value == null) {
@@ -771,24 +783,11 @@ class PlayerViewModel(
 
   fun clearLoadingState(immediate: Boolean = false, unpauseAfter: Boolean = false) {
     clearLoadingJob?.cancel()
-    if (immediate) {
-      _isLoading.value = false
-    } else {
-      clearLoadingJob = viewModelScope.launch {
-        // Force a delay to prevent thumbnail flashes and allow UI state to settle.
-        // Use a shorter delay for audio, and dynamically reduce delay for very short videos
-        val currentDuration = _preciseDuration.value
-        val settleDelay = when {
-          isAudioMedia.value -> 50L
-          currentDuration > 0f && currentDuration <= 5f -> 100L
-          else -> 800L
-        }
-        delay(settleDelay)
-        _isLoading.value = false
-        if (unpauseAfter) {
-          unpause()
-        }
-      }
+    showLoadingJob?.cancel()  // Cancel pending spinner display
+    _isSpinnerVisible.value = false
+    _isLoading.value = false
+    if (unpauseAfter) {
+      unpause()
     }
   }
 
@@ -953,9 +952,13 @@ class PlayerViewModel(
       if (playerPreferences.showSystemStatusBar.get()) {
         host.windowInsetsController.show(WindowInsetsCompat.Type.statusBars())
         host.windowInsetsController.isAppearanceLightStatusBars = false
+      } else {
+        host.windowInsetsController.hide(WindowInsetsCompat.Type.statusBars())
       }
       if (playerPreferences.showSystemNavigationBar.get()) {
         host.windowInsetsController.show(WindowInsetsCompat.Type.navigationBars())
+      } else {
+        host.windowInsetsController.hide(WindowInsetsCompat.Type.navigationBars())
       }
     } catch (e: Exception) {
       // Defensive: InsetsController animation can crash under FD pressure

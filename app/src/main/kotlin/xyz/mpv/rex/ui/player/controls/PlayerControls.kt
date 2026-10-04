@@ -43,6 +43,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -180,7 +181,6 @@ fun PlayerControls(
   val gesturePreferences = koinInject<GesturePreferences>()
   val playerTutorialManager = koinInject<PlayerTutorialManager>()
   val enableReleaseToCancel by gesturePreferences.enableReleaseToCancel.collectAsState()
-  val showSystemStatusBar by playerPreferences.showSystemStatusBar.collectAsState()
   val showSystemNavigationBar by playerPreferences.showSystemNavigationBar.collectAsState()
   val playerGradientOpacity by playerPreferences.playerGradientOpacity.collectAsState()
   val interactionSource = remember { MutableInteractionSource() }
@@ -1330,7 +1330,7 @@ fun PlayerControls(
                 }
               )
               .constrainAs(topLeftControls) {
-                top.linkTo(parent.top, if (isPortrait) spacing.extraLarge else spacing.small)
+                top.linkTo(parent.top, spacing.small)
                 start.linkTo(parent.start, spacing.large)
                 if (isPortrait) {
                   width = Dimension.fillToConstraints
@@ -1880,6 +1880,7 @@ fun PlayerControls(
 
     // ── Full-screen loading overlay to prevent thumbnail/cover flash ───────
     val isLoading by viewModel.isLoading.collectAsState()
+    val isSpinnerVisible by viewModel.isSpinnerVisible.collectAsState()
     val showLoadingCircle by playerPreferences.showLoadingCircle.collectAsState()
 
     AnimatedVisibility(
@@ -1893,7 +1894,7 @@ fun PlayerControls(
           .background(Color.Black),
         contentAlignment = Alignment.Center
       ) {
-        if (showLoadingCircle) {
+        if (showLoadingCircle && isSpinnerVisible) {
           LoadingIndicator(modifier = Modifier.size(96.dp))
         }
       }

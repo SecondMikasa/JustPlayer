@@ -1030,25 +1030,31 @@ class PlayerActivity :
       window.statusBarColor = android.graphics.Color.parseColor("#80000000") // Semi-transparent black
     }
 
-    // Always start with status bar hidden - it will show when controls are shown
-    try {
-      windowInsetsController.apply {
-        hide(WindowInsetsCompat.Type.statusBars())
-        hide(WindowInsetsCompat.Type.navigationBars())
-        systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+    // Always start with status bar hidden for videos - it will show when controls are shown
+    if (!isCurrentMediaAudio()) {
+      try {
+        windowInsetsController.apply {
+          hide(WindowInsetsCompat.Type.statusBars())
+          hide(WindowInsetsCompat.Type.navigationBars())
+          systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        }
+      } catch (e: Exception) {
+        Log.e(TAG, "Failed to setup system UI insets", e)
       }
-    } catch (e: Exception) {
-      Log.e(TAG, "Failed to setup system UI insets", e)
     }
 
     // Don't use LOW_PROFILE if we plan to show status bar with controls
     // LOW_PROFILE causes only icons to show without background
     @Suppress("DEPRECATION")
-    binding.root.systemUiVisibility =
-      View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-        View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-        View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-        if (playerPreferences.showSystemStatusBar.get()) 0 else View.SYSTEM_UI_FLAG_LOW_PROFILE
+    if (!isCurrentMediaAudio()) {
+      binding.root.systemUiVisibility =
+        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+          View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+          View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
+          if (playerPreferences.showSystemStatusBar.get()) 0 else View.SYSTEM_UI_FLAG_FULLSCREEN
+    } else {
+      binding.root.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+    }
   }
 
   private fun restoreSystemUI() {

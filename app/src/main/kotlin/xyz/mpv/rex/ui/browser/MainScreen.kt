@@ -114,6 +114,14 @@ object MainScreen : Screen {
   // Track when permission denied screen is showing to hide FAB
   private val _isPermissionDenied = MutableStateFlow(false)
   val isPermissionDenied = _isPermissionDenied.asStateFlow()
+
+  // Expose visible tab list and selected index so MainActivity can render
+  // the tab bar on top of the MiniPlayer (they are siblings in MainActivity's Box).
+  private val _visibleTabs = MutableStateFlow<List<VisibleTab>>(emptyList())
+  val visibleTabs = _visibleTabs.asStateFlow()
+
+  private val _selectedTabIndex = MutableStateFlow(0)
+  val selectedTabIndex = _selectedTabIndex.asStateFlow()
   
   /**
    * Update selection state and navigation bar visibility
@@ -233,8 +241,14 @@ object MainScreen : Screen {
           persistentPreviousTab = persistentSelectedTab
           persistentSelectedTab = page
           persistentSelectedTabId = visibleTabs[page].id
+          _selectedTabIndex.value = page
         }
       }
+    }
+
+    // Keep the static visibleTabs state in sync so MainActivity can render the tab bar
+    LaunchedEffect(visibleTabs) {
+      _visibleTabs.value = visibleTabs
     }
 
     // Keep active tab stable when visibleTabs list changes
@@ -290,7 +304,7 @@ object MainScreen : Screen {
           }
         }
 
-        // Floating Pill Bottom Navigation Bar matching reference design
+        // Floating Pill Bottom Navigation Bar
         AnimatedVisibility(
           visible = !hideNavigationBar && visibleTabs.size > 1,
           enter = slideInVertically(
@@ -314,9 +328,8 @@ object MainScreen : Screen {
                   pagerState.animateScrollToPage(index)
                 }
               }
-            },
-            modifier = Modifier
-              .padding(bottom = if (miniPlayerState.isPlaybackActive) 76.dp else 0.dp)
+            }
+            // NO bottom padding! It stays at the very bottom.
           )
         }
       }
@@ -404,7 +417,7 @@ private fun FloatingPillBottomBar(
 // CompositionLocal for navigation bar height
 val LocalNavigationBarHeight = compositionLocalOf { 0.dp }
 
-private data class VisibleTab(
+data class VisibleTab(
   val id: String,
   val label: String,
   val icon: androidx.compose.ui.graphics.vector.ImageVector,

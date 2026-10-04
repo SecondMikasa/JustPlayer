@@ -187,10 +187,13 @@ class MainActivity : ComponentActivity() {
     val downloadProgress by (updateViewModel?.downloadProgress ?: MutableStateFlow(0f)).collectAsState()
     val miniPlayerState by miniPlayerStateManager.state.collectAsState()
     val hideNavigationBar by MainScreen.shouldHideNavigationBar.collectAsState()
+    val visibleTabs by MainScreen.visibleTabs.collectAsState()
     val currentRoute = typedBackstack.lastOrNull()
     val isMainScreen = currentRoute == MainScreen
     
-    val targetBottomPadding = if (isMainScreen && !hideNavigationBar) {
+    val showBottomBar = isMainScreen && !hideNavigationBar && visibleTabs.size > 1
+    
+    val targetBottomPadding = if (showBottomBar) {
       if (miniPlayerState.isExpanded) 8.dp else 88.dp
     } else 8.dp
     val animatedBottomPadding by androidx.compose.animation.core.animateDpAsState(
@@ -205,7 +208,7 @@ class MainActivity : ComponentActivity() {
       animationSpec = tween(220),
       label = "miniPlayerHeight"
     )
-    val navBarHeight = if (isMainScreen && !hideNavigationBar) 80.dp else 0.dp
+    val navBarHeight = if (showBottomBar) 80.dp else 0.dp
     val totalNavigationBarHeight = navBarHeight + miniPlayerHeight
 
     BackHandler(enabled = isMainScreen) {
