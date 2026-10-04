@@ -51,18 +51,18 @@ object PlaylistScreen : Screen {
   @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
   @Composable
   override fun Content() {
-    InternalContent(isEmbedded = false, externalSearchQuery = "")
+    InternalContent(isEmbedded = false, externalSearchQuery = "", showOnlyMusicPlaylists = false)
   }
 
   @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
   @Composable
   fun EmbeddedContent(searchQuery: String = "", layoutModeOverride: MediaLayoutMode? = null) {
-    InternalContent(isEmbedded = true, externalSearchQuery = searchQuery, layoutModeOverride = layoutModeOverride)
+    InternalContent(isEmbedded = true, externalSearchQuery = searchQuery, layoutModeOverride = layoutModeOverride, showOnlyMusicPlaylists = true)
   }
 
   @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
   @Composable
-  private fun InternalContent(isEmbedded: Boolean, externalSearchQuery: String, layoutModeOverride: MediaLayoutMode? = null) {
+  private fun InternalContent(isEmbedded: Boolean, externalSearchQuery: String, layoutModeOverride: MediaLayoutMode? = null, showOnlyMusicPlaylists: Boolean = false) {
     val context = LocalContext.current
     val repository = koinInject<PlaylistRepository>()
     val backStack = LocalBackStack.current
@@ -76,6 +76,7 @@ object PlaylistScreen : Screen {
     val playlistsWithCount by viewModel.playlistsWithCount.collectAsState()
     val uiSettings by viewModel.uiSettings.collectAsState()
     val hasCompletedInitialLoad by viewModel.hasCompletedInitialLoad.collectAsState()
+    val showMusicPlaylistsInMainTab by viewModel.showMusicPlaylistsInMainTab.collectAsState()
 
     // Search state
     var localSearchQuery by rememberSaveable { mutableStateOf("") }
@@ -86,13 +87,21 @@ object PlaylistScreen : Screen {
     val activeSearchQuery = if (isEmbedded) externalSearchQuery else localSearchQuery
     val isSearchActive = if (isEmbedded) externalSearchQuery.isNotBlank() else (isSearching && localSearchQuery.isNotBlank())
 
-    // Filter playlists based on search query
+    // Filter playlists based on search query and music playlist context
     val filteredPlaylists = if (isSearchActive) {
       playlistsWithCount.filter { playlistWithCount ->
         playlistWithCount.playlist.name.contains(activeSearchQuery, ignoreCase = true)
       }
     } else {
       playlistsWithCount
+    }.filter { playlistWithCount ->
+      // When embedded in Music tab, show ONLY music playlists
+      // When in main Playlist tab, respect the setting
+      if (showOnlyMusicPlaylists) {
+        playlistWithCount.playlist.isMusicPlaylist
+      } else {
+        showMusicPlaylistsInMainTab || !playlistWithCount.playlist.isMusicPlaylist
+      }
     }
 
     // Request focus when search is activated
@@ -331,6 +340,7 @@ object PlaylistScreen : Screen {
         onDismiss = { showPlaylistActionSheet = false },
         repository = repository,
         context = context,
+        isMusicContext = showOnlyMusicPlaylists,
       )
 
       if (showRenameDialog && selectionManager.isSingleSelection) {

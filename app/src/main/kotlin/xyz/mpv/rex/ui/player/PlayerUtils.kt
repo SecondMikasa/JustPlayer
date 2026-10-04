@@ -201,7 +201,10 @@ internal fun Uri.resolveUri(context: Context): String? {
  */
 fun observeTracks(json: Json): Flow<List<TrackNode>> {
   return MPVLib.propNode["track-list"].map { node ->
-    node?.toObject<List<TrackNode>>(json) ?: emptyList()
+    runCatching {
+      node?.toObject<List<TrackNode>>(json)
+    }.onFailure { Log.e(TAG, "Failed to parse tracks", it) }
+      .getOrNull() ?: emptyList()
   }
 }
 
@@ -210,8 +213,12 @@ fun observeTracks(json: Json): Flow<List<TrackNode>> {
  */
 fun observeChapters(json: Json): Flow<ImmutableList<dev.vivvvek.seeker.Segment>> {
   return MPVLib.propNode["chapter-list"].map { node ->
-    node?.toObject<List<ChapterNode>>(json)?.map { it.toSegment() }?.toImmutableList()
-      ?: persistentListOf()
+    runCatching {
+      node?.toObject<List<ChapterNode>>(json)
+        ?.mapIndexed { index, chapter -> chapter.toSegment("Chapter ${index + 1}") }
+        ?.toImmutableList()
+    }.onFailure { Log.e(TAG, "Failed to parse chapters", it) }
+      .getOrNull() ?: persistentListOf()
   }
 }
 

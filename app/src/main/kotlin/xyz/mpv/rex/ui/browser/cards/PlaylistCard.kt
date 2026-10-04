@@ -5,7 +5,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
-import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
@@ -125,9 +124,9 @@ fun PlaylistCard(
   // Create a custom chip for playlist type
   val isNetwork = playlist.isM3uPlaylist
   val isMusic = playlist.isMusicPlaylist
-  val chipText = if (isMusic) "🎵 Music" else if (isNetwork) "Network" else "Local"
-  val chipColor = if (isMusic) androidx.compose.material3.MaterialTheme.colorScheme.secondary else if (isNetwork) androidx.compose.material3.MaterialTheme.colorScheme.tertiary else androidx.compose.material3.MaterialTheme.colorScheme.primary
-  val chipBgColor = if (isMusic) androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer else if (isNetwork) androidx.compose.material3.MaterialTheme.colorScheme.tertiaryContainer else androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer
+  val chipText = if (isMusic) "Audio" else if (isNetwork) "Network" else "Video"
+  val chipColor = if (isNetwork) androidx.compose.material3.MaterialTheme.colorScheme.tertiary else androidx.compose.material3.MaterialTheme.colorScheme.secondary
+  val chipBgColor = if (isNetwork) androidx.compose.material3.MaterialTheme.colorScheme.tertiaryContainer else androidx.compose.material3.MaterialTheme.colorScheme.secondaryContainer
 
   val customThumbnail = thumbnail?.asImageBitmap()
 
@@ -154,10 +153,7 @@ fun PlaylistCard(
             .height(calculatedThumbnailSize)
             .background(
               androidx.compose.ui.graphics.Brush.verticalGradient(
-                colors = if (isMusic) listOf(
-                  androidx.compose.material3.MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
-                  androidx.compose.material3.MaterialTheme.colorScheme.secondary.copy(alpha = 0.05f)
-                ) else listOf(
+                colors = listOf(
                   androidx.compose.material3.MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                   androidx.compose.material3.MaterialTheme.colorScheme.primary.copy(alpha = 0.05f)
                 )
@@ -175,10 +171,10 @@ fun PlaylistCard(
             )
           } else {
             androidx.compose.material3.Icon(
-              if (isMusic) Icons.Filled.QueueMusic else Icons.AutoMirrored.Filled.PlaylistPlay,
+              Icons.AutoMirrored.Filled.PlaylistPlay,
               contentDescription = null,
-              modifier = Modifier.fillMaxSize(if (isMusic) 0.5f else 0.6f),
-              tint = if (isMusic) androidx.compose.material3.MaterialTheme.colorScheme.secondary else androidx.compose.material3.MaterialTheme.colorScheme.primary
+              modifier = Modifier.fillMaxSize(0.6f),
+              tint = androidx.compose.material3.MaterialTheme.colorScheme.primary
             )
           }
           
@@ -225,10 +221,7 @@ fun PlaylistCard(
             .size(calculatedThumbnailSize)
             .background(
               androidx.compose.ui.graphics.Brush.radialGradient(
-                colors = if (isMusic) listOf(
-                  androidx.compose.material3.MaterialTheme.colorScheme.secondary.copy(alpha = 0.2f),
-                  androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
-                ) else listOf(
+                colors = listOf(
                   androidx.compose.material3.MaterialTheme.colorScheme.primary.copy(alpha = 0.2f),
                   androidx.compose.material3.MaterialTheme.colorScheme.surfaceVariant
                 )
@@ -246,10 +239,10 @@ fun PlaylistCard(
             )
           } else {
             androidx.compose.material3.Icon(
-              if (isMusic) Icons.Filled.QueueMusic else Icons.AutoMirrored.Filled.PlaylistPlay,
+              Icons.AutoMirrored.Filled.PlaylistPlay,
               contentDescription = null,
-              modifier = Modifier.fillMaxSize(if (isMusic) 0.5f else 0.6f),
-              tint = if (isMusic) androidx.compose.material3.MaterialTheme.colorScheme.secondary else androidx.compose.material3.MaterialTheme.colorScheme.primary
+              modifier = Modifier.fillMaxSize(0.6f),
+              tint = androidx.compose.material3.MaterialTheme.colorScheme.primary
             )
           }
         }

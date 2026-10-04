@@ -194,7 +194,7 @@ class PlaylistRepository(private val playlistDao: PlaylistDao) {
   }
 
   // M3U Playlist operations
-  suspend fun createM3UPlaylist(url: String): Result<Long> {
+  suspend fun createM3UPlaylist(url: String, isMusicPlaylist: Boolean = false): Result<Long> {
     return try {
       val parseResult = M3UParser.parseFromUrl(url)
       
@@ -207,7 +207,8 @@ class PlaylistRepository(private val playlistDao: PlaylistDao) {
               createdAt = now,
               updatedAt = now,
               m3uSourceUrl = url,
-              isM3uPlaylist = true
+              isM3uPlaylist = true,
+              isMusicPlaylist = isMusicPlaylist,
             )
           )
           
@@ -235,7 +236,7 @@ class PlaylistRepository(private val playlistDao: PlaylistDao) {
     }
   }
 
-  suspend fun createM3UPlaylistFromFile(context: Context, uri: Uri): Result<Long> {
+  suspend fun createM3UPlaylistFromFile(context: Context, uri: Uri, isMusicPlaylist: Boolean = false): Result<Long> {
     return try {
       val parseResult = M3UParser.parseFromUri(context, uri)
       
@@ -248,7 +249,8 @@ class PlaylistRepository(private val playlistDao: PlaylistDao) {
               createdAt = now,
               updatedAt = now,
               m3uSourceUrl = null, // Local file, no URL to refresh from
-              isM3uPlaylist = true
+              isM3uPlaylist = true,
+              isMusicPlaylist = isMusicPlaylist,
             )
           )
           

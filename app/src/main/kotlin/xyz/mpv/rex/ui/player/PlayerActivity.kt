@@ -1025,9 +1025,11 @@ class PlayerActivity :
     window.attributes.layoutInDisplayCutoutMode =
       WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
 
-    // Set status bar color for when it will be shown (with controls)
+    // Set status bar color for when it will be shown (with controls) or swipe down
     if (playerPreferences.showSystemStatusBar.get()) {
       window.statusBarColor = android.graphics.Color.parseColor("#80000000") // Semi-transparent black
+    } else {
+      window.statusBarColor = android.graphics.Color.TRANSPARENT
     }
 
     // Always start with status bar hidden for videos - it will show when controls are shown
@@ -1043,15 +1045,15 @@ class PlayerActivity :
       }
     }
 
-    // Don't use LOW_PROFILE if we plan to show status bar with controls
-    // LOW_PROFILE causes only icons to show without background
+    // Modern insets handle fullscreen and immersive modes.
+    // We only need layout stable to ensure our UI doesn't jump wildly if we don't want it to,
+    // though setDecorFitsSystemWindows(false) already handles most of this.
     @Suppress("DEPRECATION")
     if (!isCurrentMediaAudio()) {
       binding.root.systemUiVisibility =
-        View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
-          View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-          View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-          if (playerPreferences.showSystemStatusBar.get()) 0 else View.SYSTEM_UI_FLAG_FULLSCREEN
+        View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+          View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+          View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
     } else {
       binding.root.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
     }

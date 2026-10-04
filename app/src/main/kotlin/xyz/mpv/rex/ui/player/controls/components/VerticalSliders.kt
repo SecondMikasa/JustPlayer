@@ -28,7 +28,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.animation.core.FastOutSlowInEasing
 import org.koin.compose.koinInject
 import xyz.mpv.rex.preferences.AppearancePreferences
@@ -347,19 +349,87 @@ fun VolumeSlider(
   isActive: Boolean = false,
   /** Called with the new absolute volume level when the user drags the slider. */
   onVolumeChange: ((Int) -> Unit)? = null,
+  /** Called with the new boost volume level when the user drags into the boost range. */
+  onBoostVolumeChange: ((Int) -> Unit)? = null,
   /** Called with true when the user starts dragging, false when they release.
    *  The caller uses this to keep the slider visible while the user is interacting. */
   onInteractionChange: ((Boolean) -> Unit)? = null,
 ) {
-  val percentage = (percentage(volume, range) * 100).roundToInt()
+  val currentVolume by rememberUpdatedState(volume)
+  val currentMpvVolume by rememberUpdatedState(mpvVolume)
+  val currentOnVolumeChange by rememberUpdatedState(onVolumeChange)
+  val currentOnBoostVolumeChange by rememberUpdatedState(onBoostVolumeChange)
+  val currentOnInteractionChange by rememberUpdatedState(onInteractionChange)
 
-  // Accumulate sub-step drag pixels so small drags still register as a volume change.
-  // One "step" = 8dp of vertical drag per volume unit.
-  val dragAccumulator = remember { mutableFloatStateOf(0f) }
-  val trackHeightPx = remember { mutableFloatStateOf(1f) }  // populated by onSizeChanged below
+  var isDragging by remember { mutableStateOf(false) }
+  var activeLevel by remember { mutableFloatStateOf(0f) }
+  val trackHeightPx = remember { mutableFloatStateOf(300f) }
+
+  val normalRangeSize = (range.endInclusive - range.start).coerceAtLeast(1)
+  val boostRangeSize = boostRange?.let { (it.endInclusive - it.start).coerceAtLeast(0) } ?: 0
+  val totalRangeSize = normalRangeSize + boostRangeSize
+
+  val dragModifier = if (onVolumeChange != null) {
+    Modifier.pointerInput(range, boostRange) {
+      detectVerticalDragGestures(
+        onDragStart = {
+          isDragging = true
+          val currentBoost = if (boostRange != null) (currentMpvVolume - 100).coerceAtLeast(0) else 0
+          activeLevel = (currentVolume - range.start).toFloat() + currentBoost.toFloat()
+          currentOnInteractionChange?.invoke(true)
+        },
+        onDragEnd = {
+          isDragging = false
+          currentOnInteractionChange?.invoke(false)
+        },
+        onDragCancel = {
+          isDragging = false
+          currentOnInteractionChange?.invoke(false)
+        },
+        onVerticalDrag = { change, dragAmount ->
+          change.consume()
+          val sliderHeightPx = trackHeightPx.floatValue.coerceAtLeast(1f)
+          val delta = (-dragAmount / sliderHeightPx) * totalRangeSize
+          activeLevel = (activeLevel + delta).coerceIn(0f, totalRangeSize.toFloat())
+
+          if (activeLevel <= normalRangeSize.toFloat()) {
+            val targetVol = (range.start + activeLevel.roundToInt()).coerceIn(range.start, range.endInclusive)
+            currentOnVolumeChange?.invoke(targetVol)
+            if (boostRange != null && currentMpvVolume > 100) {
+              currentOnBoostVolumeChange?.invoke(0)
+            }
+          } else {
+            currentOnVolumeChange?.invoke(range.endInclusive)
+            if (boostRange != null && currentOnBoostVolumeChange != null) {
+              val targetBoost = (activeLevel - normalRangeSize.toFloat()).roundToInt().coerceIn(boostRange.start, boostRange.endInclusive)
+              currentOnBoostVolumeChange?.invoke(targetBoost)
+            }
+          }
+        },
+      )
+    }
+  } else {
+    Modifier
+  }
+
+  val displayVol = if (isDragging) {
+    (range.start + minOf(activeLevel.roundToInt(), normalRangeSize)).coerceIn(range.start, range.endInclusive)
+  } else {
+    volume
+  }
+
+  val displayBoost = if (isDragging && boostRange != null) {
+    maxOf(0, (activeLevel - normalRangeSize.toFloat()).roundToInt()).coerceIn(boostRange.start, boostRange.endInclusive)
+  } else {
+    (mpvVolume - 100).coerceAtLeast(0)
+  }
+
+  val percentage = (percentage(displayVol, range) * 100).roundToInt()
 
   Surface(
-    modifier = modifier,
+    modifier = modifier
+      .then(dragModifier)
+      .onSizeChanged { if (it.height > 0) trackHeightPx.floatValue = it.height.toFloat() },
     shape = RoundedCornerShape(20.dp),
     color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
     contentColor = MaterialTheme.colorScheme.onSurface,
@@ -369,49 +439,21 @@ fun VolumeSlider(
   ) {
     Column(
       modifier = Modifier
-        .padding(horizontal = 12.dp, vertical = 16.dp)
-        .pointerInput(range, onVolumeChange) {
-          detectVerticalDragGestures(
-            onDragStart = {
-              dragAccumulator.floatValue = 0f
-              onInteractionChange?.invoke(true)
-            },
-            onDragEnd = { onInteractionChange?.invoke(false) },
-            onDragCancel = { onInteractionChange?.invoke(false) },
-            onVerticalDrag = { change, dragAmount ->
-              change.consume()
-              // dragAmount is negative when dragging up (increase volume).
-              // Map full slider height to the full volume range so a full swipe
-              // from bottom to top changes volume from 0 to max.
-              val rangeSize = (range.endInclusive - range.start).coerceAtLeast(1)
-              val sliderHeightPx = trackHeightPx.floatValue.coerceAtLeast(1f)
-              val delta = (-dragAmount / sliderHeightPx) * rangeSize
-              dragAccumulator.floatValue += delta
-              val steps = dragAccumulator.floatValue.toInt()
-              if (steps != 0) {
-                dragAccumulator.floatValue -= steps
-                val newVolume = (volume + steps).coerceIn(range.start, range.endInclusive)
-                onVolumeChange?.invoke(newVolume)
-              }
-            },
-          )
-        }
-        .onSizeChanged { trackHeightPx.floatValue = it.height.toFloat() },
+        .padding(horizontal = 12.dp, vertical = 16.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.smaller),
     ) {
-      val boostVolume = mpvVolume - 100
       Text(
-        getVolumeSliderText(volume, mpvVolume, boostVolume, percentage, displayAsPercentage),
+        getVolumeSliderText(displayVol, 100 + displayBoost, displayBoost, percentage, displayAsPercentage),
         style = MaterialTheme.typography.bodySmall,
         textAlign = TextAlign.Center,
       )
       VerticalSlider(
-        if (displayAsPercentage) percentage else volume,
+        if (displayAsPercentage) percentage else displayVol,
         if (displayAsPercentage) 0..100 else range,
-        overflowValue = boostVolume,
+        overflowValue = displayBoost,
         overflowRange = boostRange,
-        isActive = isActive
+        isActive = isActive || isDragging
       )
       Icon(
         when (percentage) {

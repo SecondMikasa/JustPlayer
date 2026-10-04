@@ -56,6 +56,7 @@ fun PlaylistActionSheet(
   repository: xyz.mpv.rex.database.repository.PlaylistRepository,
   context: android.content.Context,
   modifier: Modifier = Modifier,
+  isMusicContext: Boolean = false,
 ) {
   var showCreateDialog by remember { mutableStateOf(false) }
   var showM3UDialog by remember { mutableStateOf(false) }
@@ -222,7 +223,7 @@ fun PlaylistActionSheet(
                 if (playlistName.isNotBlank()) {
                   coroutineScope.launch {
                     try {
-                      repository.createPlaylist(playlistName.trim())
+                      repository.createPlaylist(playlistName.trim(), isMusicPlaylist = isMusicContext)
                       android.widget.Toast.makeText(
                         context,
                         createdSuccessMsg,
@@ -263,7 +264,7 @@ fun PlaylistActionSheet(
       uri?.let {
         isLoading = true
         coroutineScope.launch {
-          val result = repository.createM3UPlaylistFromFile(context, it)
+          val result = repository.createM3UPlaylistFromFile(context, it, isMusicPlaylist = isMusicContext)
           result.onSuccess {
             android.widget.Toast.makeText(
               context,
@@ -373,7 +374,7 @@ fun PlaylistActionSheet(
                 if (playlistUrl.isNotBlank()) {
                   isLoading = true
                   coroutineScope.launch {
-                    val result = repository.createM3UPlaylist(playlistUrl.trim())
+                    val result = repository.createM3UPlaylist(playlistUrl.trim(), isMusicPlaylist = isMusicContext)
                     result.onSuccess {
                       android.widget.Toast.makeText(
                         context,

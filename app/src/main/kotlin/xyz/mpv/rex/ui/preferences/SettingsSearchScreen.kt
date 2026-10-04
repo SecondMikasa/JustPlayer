@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
+import androidx.compose.material.icons.automirrored.outlined.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.Clear
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Settings
@@ -35,6 +36,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -56,6 +58,7 @@ import androidx.compose.ui.unit.dp
 import xyz.mpv.rex.R
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.utils.LocalBackStack
+import xyz.mpv.rex.ui.utils.LocalHighlightedPrefKey
 import kotlinx.serialization.Serializable
 
 @Serializable
@@ -220,7 +223,15 @@ object SettingsSearchScreen : Screen {
                                 preference = preference,
                                 onClick = {
                                     keyboardController?.hide()
-                                    backstack.add(preference.screen)
+                                    // Navigate to the target screen and provide the highlight key
+                                    // so the screen can scroll to and highlight the specific preference
+                                    val highlightKey = preference.titleRes
+                                    backstack.add(
+                                        HighlightedDestination(
+                                            screen = preference.screen,
+                                            highlightKey = highlightKey,
+                                        )
+                                    )
                                 }
                             )
                         }
@@ -295,6 +306,33 @@ private fun SearchResultItem(
                     color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
                 )
             }
+
+            Icon(
+                imageVector = Icons.AutoMirrored.Outlined.KeyboardArrowRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+}
+
+/**
+ * Internal navigation wrapper that carries a highlight key to a destination screen.
+ * Used by settings search to scroll to a specific preference item.
+ *
+ * Note: Not @Serializable because it holds a polymorphic Screen interface.
+ * This works as an in-memory-only navigation key — acceptable since it wraps an
+ * existing serializable Screen. On process death, navigation falls back gracefully.
+ */
+internal data class HighlightedDestination(
+    val screen: Screen,
+    val highlightKey: Int?,
+) : xyz.mpv.rex.presentation.Screen {
+    @Composable
+    override fun Content() {
+        CompositionLocalProvider(LocalHighlightedPrefKey provides highlightKey) {
+            screen.Content()
         }
     }
 }

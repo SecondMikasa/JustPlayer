@@ -46,6 +46,9 @@ import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.theme.DarkMode
 import xyz.mpv.rex.ui.utils.LocalBackStack
+import xyz.mpv.rex.ui.utils.LocalHighlightedPrefKey
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.lazy.rememberLazyListState
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.serialization.Serializable
@@ -80,6 +83,51 @@ object AppearancePreferencesScreen : Screen {
         val foldersPreferences = koinInject<FoldersPreferences>()
         val hybridMediaIndex = koinInject<xyz.mpv.rex.database.repository.HybridMediaIndexRepository>()
         val backstack = LocalBackStack.current
+        val highlightedKey = LocalHighlightedPrefKey.current
+        val listState = rememberLazyListState()
+        
+        LaunchedEffect(highlightedKey) {
+            if (highlightedKey != null) {
+                // Maps preference key to LazyColumn item index (1=Theme, 3=Bottom Nav, 5=File Browser, 7=Thumbnails)
+                val index = when (highlightedKey) {
+                    R.string.pref_appearance_amoled_mode_title,
+                    R.string.pref_appearance_use_system_font_title,
+                    R.string.pref_appearance_match_player_controls_to_theme_title,
+                    R.string.pref_appearance_hide_player_buttons_background_title,
+                    R.string.pref_appearance_enable_glass_player_controls_title,
+                    R.string.pref_appearance_enable_glass_seekbar_title,
+                    R.string.pref_appearance_player_always_dark_mode_title -> 1
+
+                    R.string.pref_appearance_tab_order_title,
+                    R.string.pref_appearance_tab_home_title,
+                    R.string.pref_appearance_tab_recents_title,
+                    R.string.pref_appearance_tab_playlists_title,
+                    R.string.pref_appearance_tab_network_title,
+                    R.string.pref_appearance_tab_music_title -> 3
+
+                    R.string.pref_appearance_dual_pane_title,
+                    R.string.pref_appearance_unlimited_name_lines_title,
+                    R.string.pref_appearance_show_unplayed_old_video_label_title,
+                    R.string.pref_appearance_unplayed_old_video_days_title,
+                    R.string.pref_appearance_auto_scroll_title,
+                    R.string.pref_appearance_watched_threshold_title,
+                    R.string.pref_show_audio_files_title,
+                    R.string.pref_include_no_media_content_title,
+                    R.string.pref_show_tree_view_path_title -> 5
+
+                    R.string.pref_gesture_tap_thumbnail_to_select_title,
+                    R.string.pref_appearance_show_network_thumbnails_title,
+                    R.string.pref_appearance_thumbnail_strategy_title,
+                    R.string.pref_appearance_thumbnail_position_title -> 7
+
+                    else -> null
+                }
+                if (index != null) {
+                    kotlinx.coroutines.delay(150)
+                    listState.scrollToItem(index)
+                }
+            }
+        }
         val systemDarkTheme = isSystemInDarkTheme()
 
         val darkMode by preferences.darkMode.collectAsState()
@@ -160,6 +208,7 @@ object AppearancePreferencesScreen : Screen {
             val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
             ProvidePreferenceLocals {
                 LazyColumn(
+                state = listState,
                     modifier =
                     Modifier
                         .fillMaxSize()
@@ -197,130 +246,144 @@ object AppearancePreferencesScreen : Screen {
                             PreferenceDivider()
 
                             // AMOLED mode toggle
-                            SwitchPreference(
-                                value = amoledMode,
-                                onValueChange = { newValue ->
-                                    preferences.amoledMode.set(newValue)
-                                },
-                                title = { Text(text = stringResource(id = R.string.pref_appearance_amoled_mode_title)) },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_amoled_mode_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                },
-                                enabled = darkMode != DarkMode.Light
-                            )
+                            HighlightablePreference(R.string.pref_appearance_amoled_mode_title) {
+                                SwitchPreference(
+                                                                value = amoledMode,
+                                                                onValueChange = { newValue ->
+                                                                    preferences.amoledMode.set(newValue)
+                                                                },
+                                                                title = { Text(text = stringResource(id = R.string.pref_appearance_amoled_mode_title)) },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_amoled_mode_summary),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                },
+                                                                enabled = darkMode != DarkMode.Light
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             // System font toggle
                             val useSystemFont by preferences.useSystemFont.collectAsState()
 
-                            SwitchPreference(
-                                value = useSystemFont,
-                                onValueChange = { newValue ->
-                                    preferences.useSystemFont.set(newValue)
-                                },
-                                title = { Text(text = stringResource(id = R.string.pref_appearance_use_system_font_title)) },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_use_system_font_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_use_system_font_title) {
+                                SwitchPreference(
+                                                                value = useSystemFont,
+                                                                onValueChange = { newValue ->
+                                                                    preferences.useSystemFont.set(newValue)
+                                                                },
+                                                                title = { Text(text = stringResource(id = R.string.pref_appearance_use_system_font_title)) },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_use_system_font_summary),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                },
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val matchPlayerControlsToTheme by preferences.matchPlayerControlsToTheme.collectAsState()
-                            SwitchPreference(
-                                value = matchPlayerControlsToTheme,
-                                onValueChange = { preferences.matchPlayerControlsToTheme.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_match_player_controls_to_theme_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_match_player_controls_to_theme_summary),
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_match_player_controls_to_theme_title) {
+                                SwitchPreference(
+                                                                value = matchPlayerControlsToTheme,
+                                                                onValueChange = { preferences.matchPlayerControlsToTheme.set(it) },
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_match_player_controls_to_theme_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_match_player_controls_to_theme_summary),
+                                                                    )
+                                                                },
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val hidePlayerButtonsBackground by preferences.hidePlayerButtonsBackground.collectAsState()
-                            SwitchPreference(
-                                value = hidePlayerButtonsBackground,
-                                onValueChange = { preferences.hidePlayerButtonsBackground.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_summary),
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_hide_player_buttons_background_title) {
+                                SwitchPreference(
+                                                                value = hidePlayerButtonsBackground,
+                                                                onValueChange = { preferences.hidePlayerButtonsBackground.set(it) },
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_summary),
+                                                                    )
+                                                                },
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val enableGlassPlayerControls by preferences.enableGlassPlayerControls.collectAsState()
-                            SwitchPreference(
-                                value = enableGlassPlayerControls,
-                                onValueChange = { preferences.enableGlassPlayerControls.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_enable_glass_player_controls_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_enable_glass_player_controls_summary),
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_enable_glass_player_controls_title) {
+                                SwitchPreference(
+                                                                value = enableGlassPlayerControls,
+                                                                onValueChange = { preferences.enableGlassPlayerControls.set(it) },
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_enable_glass_player_controls_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_enable_glass_player_controls_summary),
+                                                                    )
+                                                                },
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val enableGlassSeekbarBackground by preferences.enableGlassSeekbarBackground.collectAsState()
-                            SwitchPreference(
-                                value = enableGlassSeekbarBackground,
-                                onValueChange = { preferences.enableGlassSeekbarBackground.set(it) },
-                                enabled = enableGlassPlayerControls,
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_summary),
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_enable_glass_seekbar_title) {
+                                SwitchPreference(
+                                                                value = enableGlassSeekbarBackground,
+                                                                onValueChange = { preferences.enableGlassSeekbarBackground.set(it) },
+                                                                enabled = enableGlassPlayerControls,
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_summary),
+                                                                    )
+                                                                },
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val playerAlwaysDarkMode by preferences.playerAlwaysDarkMode.collectAsState()
-                            SwitchPreference(
-                                value = playerAlwaysDarkMode,
-                                onValueChange = { preferences.playerAlwaysDarkMode.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_player_always_dark_mode_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_player_always_dark_mode_summary),
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_player_always_dark_mode_title) {
+                                SwitchPreference(
+                                                                value = playerAlwaysDarkMode,
+                                                                onValueChange = { preferences.playerAlwaysDarkMode.set(it) },
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_player_always_dark_mode_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_player_always_dark_mode_summary),
+                                                                    )
+                                                                },
+                                                            )
+                            }
                         }
                     }
 
@@ -362,90 +425,100 @@ object AppearancePreferencesScreen : Screen {
                                 PreferenceDivider()
                                 when (tabId) {
                                     BrowserPreferences.TAB_HOME -> {
-                                        SwitchPreference(
-                                            value = true,
-                                            onValueChange = {},
-                                            enabled = false,
-                                            title = {
-                                                Text(
-                                                    text = stringResource(id = R.string.pref_appearance_tab_home_title),
-                                                )
-                                            },
-                                            summary = {
-                                                Text(
-                                                    text = stringResource(id = R.string.pref_appearance_tab_home_summary),
-                                                    color = MaterialTheme.colorScheme.outline,
-                                                )
-                                            }
-                                        )
+                                        HighlightablePreference(R.string.pref_appearance_tab_home_title) {
+                                            SwitchPreference(
+                                                                                        value = true,
+                                                                                        onValueChange = {},
+                                                                                        enabled = false,
+                                                                                        title = {
+                                                                                            Text(
+                                                                                                text = stringResource(id = R.string.pref_appearance_tab_home_title),
+                                                                                            )
+                                                                                        },
+                                                                                        summary = {
+                                                                                            Text(
+                                                                                                text = stringResource(id = R.string.pref_appearance_tab_home_summary),
+                                                                                                color = MaterialTheme.colorScheme.outline,
+                                                                                            )
+                                                                                        }
+                                                                                    )
+                                        }
                                     }
                                     BrowserPreferences.TAB_RECENTS -> {
-                                        SwitchPreference(
-                                            value = enableTabRecents,
-                                            onValueChange = { browserPreferences.enableTabRecents.set(it) },
-                                            title = {
-                                                Text(
-                                                    text = stringResource(id = R.string.pref_appearance_tab_recents_title),
-                                                )
-                                            },
-                                            summary = {
-                                                Text(
-                                                    text = stringResource(id = R.string.pref_appearance_tab_recents_summary),
-                                                    color = MaterialTheme.colorScheme.outline,
-                                                )
-                                            }
-                                        )
+                                        HighlightablePreference(R.string.pref_appearance_tab_recents_title) {
+                                            SwitchPreference(
+                                                                                        value = enableTabRecents,
+                                                                                        onValueChange = { browserPreferences.enableTabRecents.set(it) },
+                                                                                        title = {
+                                                                                            Text(
+                                                                                                text = stringResource(id = R.string.pref_appearance_tab_recents_title),
+                                                                                            )
+                                                                                        },
+                                                                                        summary = {
+                                                                                            Text(
+                                                                                                text = stringResource(id = R.string.pref_appearance_tab_recents_summary),
+                                                                                                color = MaterialTheme.colorScheme.outline,
+                                                                                            )
+                                                                                        }
+                                                                                    )
+                                        }
                                     }
                                     BrowserPreferences.TAB_PLAYLISTS -> {
-                                        SwitchPreference(
-                                            value = enableTabPlaylists,
-                                            onValueChange = { browserPreferences.enableTabPlaylists.set(it) },
-                                            title = {
-                                                Text(
-                                                    text = stringResource(id = R.string.pref_appearance_tab_playlists_title),
-                                                )
-                                            },
-                                            summary = {
-                                                Text(
-                                                    text = stringResource(id = R.string.pref_appearance_tab_playlists_summary),
-                                                    color = MaterialTheme.colorScheme.outline,
-                                                )
-                                            }
-                                        )
+                                        HighlightablePreference(R.string.pref_appearance_tab_playlists_title) {
+                                            SwitchPreference(
+                                                                                        value = enableTabPlaylists,
+                                                                                        onValueChange = { browserPreferences.enableTabPlaylists.set(it) },
+                                                                                        title = {
+                                                                                            Text(
+                                                                                                text = stringResource(id = R.string.pref_appearance_tab_playlists_title),
+                                                                                            )
+                                                                                        },
+                                                                                        summary = {
+                                                                                            Text(
+                                                                                                text = stringResource(id = R.string.pref_appearance_tab_playlists_summary),
+                                                                                                color = MaterialTheme.colorScheme.outline,
+                                                                                            )
+                                                                                        }
+                                                                                    )
+                                        }
                                     }
                                     BrowserPreferences.TAB_NETWORK -> {
-                                        SwitchPreference(
-                                            value = enableTabNetwork,
-                                            onValueChange = { browserPreferences.enableTabNetwork.set(it) },
-                                            title = {
-                                                Text(
-                                                    text = stringResource(id = R.string.pref_appearance_tab_network_title),
-                                                )
-                                            },
-                                            summary = {
-                                                Text(
-                                                    text = stringResource(id = R.string.pref_appearance_tab_network_summary),
-                                                    color = MaterialTheme.colorScheme.outline,
-                                                )
-                                            }
-                                        )
+                                        HighlightablePreference(R.string.pref_appearance_tab_network_title) {
+                                            SwitchPreference(
+                                                                                        value = enableTabNetwork,
+                                                                                        onValueChange = { browserPreferences.enableTabNetwork.set(it) },
+                                                                                        title = {
+                                                                                            Text(
+                                                                                                text = stringResource(id = R.string.pref_appearance_tab_network_title),
+                                                                                            )
+                                                                                        },
+                                                                                        summary = {
+                                                                                            Text(
+                                                                                                text = stringResource(id = R.string.pref_appearance_tab_network_summary),
+                                                                                                color = MaterialTheme.colorScheme.outline,
+                                                                                            )
+                                                                                        }
+                                                                                    )
+                                        }
                                     }
                                     BrowserPreferences.TAB_MUSIC -> {
-                                        SwitchPreference(
-                                            value = enableTabMusic,
-                                            onValueChange = { browserPreferences.enableTabMusic.set(it) },
-                                            title = {
-                                                Text(
-                                                    text = stringResource(id = R.string.pref_appearance_tab_music_title),
-                                                )
-                                            },
-                                            summary = {
-                                                Text(
-                                                    text = stringResource(id = R.string.pref_appearance_tab_music_summary),
-                                                    color = MaterialTheme.colorScheme.outline,
-                                                )
-                                            }
-                                        )
+                                        HighlightablePreference(R.string.pref_appearance_tab_music_title) {
+                                            SwitchPreference(
+                                                                                        value = enableTabMusic,
+                                                                                        onValueChange = { browserPreferences.enableTabMusic.set(it) },
+                                                                                        title = {
+                                                                                            Text(
+                                                                                                text = stringResource(id = R.string.pref_appearance_tab_music_title),
+                                                                                            )
+                                                                                        },
+                                                                                        summary = {
+                                                                                            Text(
+                                                                                                text = stringResource(id = R.string.pref_appearance_tab_music_summary),
+                                                                                                color = MaterialTheme.colorScheme.outline,
+                                                                                            )
+                                                                                        }
+                                                                                    )
+                                        }
                                     }
                                 }
                             }
@@ -459,164 +532,180 @@ object AppearancePreferencesScreen : Screen {
                     item {
                         PreferenceCard {
                             val enableDualPane by browserPreferences.enableDualPane.collectAsState()
-                            SwitchPreference(
-                                value = enableDualPane,
-                                onValueChange = { browserPreferences.enableDualPane.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_dual_pane_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_dual_pane_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            )
+                            HighlightablePreference(R.string.pref_appearance_dual_pane_title) {
+                                SwitchPreference(
+                                                                value = enableDualPane,
+                                                                onValueChange = { browserPreferences.enableDualPane.set(it) },
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_dual_pane_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_dual_pane_summary),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                }
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val unlimitedNameLines by preferences.unlimitedNameLines.collectAsState()
-                            SwitchPreference(
-                                value = unlimitedNameLines,
-                                onValueChange = { preferences.unlimitedNameLines.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_unlimited_name_lines_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_unlimited_name_lines_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            )
+                            HighlightablePreference(R.string.pref_appearance_unlimited_name_lines_title) {
+                                SwitchPreference(
+                                                                value = unlimitedNameLines,
+                                                                onValueChange = { preferences.unlimitedNameLines.set(it) },
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_unlimited_name_lines_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_unlimited_name_lines_summary),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                }
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val showUnplayedOldVideoLabel by preferences.showUnplayedOldVideoLabel.collectAsState()
-                            SwitchPreference(
-                                value = showUnplayedOldVideoLabel,
-                                onValueChange = { preferences.showUnplayedOldVideoLabel.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_show_unplayed_old_video_label_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_show_unplayed_old_video_label_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            )
+                            HighlightablePreference(R.string.pref_appearance_show_unplayed_old_video_label_title) {
+                                SwitchPreference(
+                                                                value = showUnplayedOldVideoLabel,
+                                                                onValueChange = { preferences.showUnplayedOldVideoLabel.set(it) },
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_show_unplayed_old_video_label_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_show_unplayed_old_video_label_summary),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                }
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val unplayedOldVideoDays by preferences.unplayedOldVideoDays.collectAsState()
-                            SliderPreference(
-                                value = unplayedOldVideoDays.toFloat(),
-                                onValueChange = { preferences.unplayedOldVideoDays.set(it.roundToInt()) },
-                                title = { Text(text = stringResource(id = R.string.pref_appearance_unplayed_old_video_days_title)) },
-                                valueRange = 1f..30f,
-                                summary = {
-                                    Text(
-                                        text = stringResource(
-                                            id = R.string.pref_appearance_unplayed_old_video_days_summary,
-                                            unplayedOldVideoDays,
-                                        ),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                },
-                                onSliderValueChange = { preferences.unplayedOldVideoDays.set(it.roundToInt()) },
-                                sliderValue = unplayedOldVideoDays.toFloat(),
-                                enabled = showUnplayedOldVideoLabel
-                            )
+                            HighlightablePreference(R.string.pref_appearance_unplayed_old_video_days_title) {
+                                SliderPreference(
+                                                                value = unplayedOldVideoDays.toFloat(),
+                                                                onValueChange = { preferences.unplayedOldVideoDays.set(it.roundToInt()) },
+                                                                title = { Text(text = stringResource(id = R.string.pref_appearance_unplayed_old_video_days_title)) },
+                                                                valueRange = 1f..30f,
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(
+                                                                            id = R.string.pref_appearance_unplayed_old_video_days_summary,
+                                                                            unplayedOldVideoDays,
+                                                                        ),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                },
+                                                                onSliderValueChange = { preferences.unplayedOldVideoDays.set(it.roundToInt()) },
+                                                                sliderValue = unplayedOldVideoDays.toFloat(),
+                                                                enabled = showUnplayedOldVideoLabel
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val autoScrollToLastPlayed by browserPreferences.autoScrollToLastPlayed.collectAsState()
-                            SwitchPreference(
-                                value = autoScrollToLastPlayed,
-                                onValueChange = { browserPreferences.autoScrollToLastPlayed.set(it) },
-                                title = {
-                                    Text(text = stringResource(R.string.pref_appearance_auto_scroll_title))
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(R.string.pref_appearance_auto_scroll_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            )
+                            HighlightablePreference(R.string.pref_appearance_auto_scroll_title) {
+                                SwitchPreference(
+                                                                value = autoScrollToLastPlayed,
+                                                                onValueChange = { browserPreferences.autoScrollToLastPlayed.set(it) },
+                                                                title = {
+                                                                    Text(text = stringResource(R.string.pref_appearance_auto_scroll_title))
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(R.string.pref_appearance_auto_scroll_summary),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                }
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val watchedThreshold by browserPreferences.watchedThreshold.collectAsState()
-                            SliderPreference(
-                                value = watchedThreshold.toFloat(),
-                                onValueChange = { browserPreferences.watchedThreshold.set(it.roundToInt()) },
-                                sliderValue = watchedThreshold.toFloat(),
-                                onSliderValueChange = { browserPreferences.watchedThreshold.set(it.roundToInt()) },
-                                title = { Text(text = stringResource(id = R.string.pref_appearance_watched_threshold_title)) },
-                                valueRange = 50f..100f,
-                                valueSteps = 9,
-                                summary = {
-                                    Text(
-                                        text = stringResource(
-                                            id = R.string.pref_appearance_watched_threshold_summary,
-                                            watchedThreshold,
-                                        ),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_watched_threshold_title) {
+                                SliderPreference(
+                                                                value = watchedThreshold.toFloat(),
+                                                                onValueChange = { browserPreferences.watchedThreshold.set(it.roundToInt()) },
+                                                                sliderValue = watchedThreshold.toFloat(),
+                                                                onSliderValueChange = { browserPreferences.watchedThreshold.set(it.roundToInt()) },
+                                                                title = { Text(text = stringResource(id = R.string.pref_appearance_watched_threshold_title)) },
+                                                                valueRange = 50f..100f,
+                                                                valueSteps = 9,
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(
+                                                                            id = R.string.pref_appearance_watched_threshold_summary,
+                                                                            watchedThreshold,
+                                                                        ),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                },
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val showAudioFiles by browserPreferences.showAudioFiles.collectAsState()
-                            SwitchPreference(
-                                value = showAudioFiles,
-                                onValueChange = { browserPreferences.showAudioFiles.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_show_audio_files_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_show_audio_files_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            )
+                            HighlightablePreference(R.string.pref_show_audio_files_title) {
+                                SwitchPreference(
+                                                                value = showAudioFiles,
+                                                                onValueChange = { browserPreferences.showAudioFiles.set(it) },
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_show_audio_files_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_show_audio_files_summary),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                }
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val includeNoMediaContent by browserPreferences.includeNoMediaContent.collectAsState()
-                            SwitchPreference(
-                                value = includeNoMediaContent,
-                                onValueChange = { newValue ->
-                                    browserPreferences.includeNoMediaContent.set(newValue)
-                                    MediaLibraryEvents.notifyChanged()
-                                    scope.launch(Dispatchers.IO) {
-                                        runCatching { hybridMediaIndex.ensureFresh(force = true, userInitiated = true) }
-                                    }
-                                },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_include_no_media_content_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_include_no_media_content_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_include_no_media_content_title) {
+                                SwitchPreference(
+                                                                value = includeNoMediaContent,
+                                                                onValueChange = { newValue ->
+                                                                    browserPreferences.includeNoMediaContent.set(newValue)
+                                                                    MediaLibraryEvents.notifyChanged()
+                                                                    scope.launch(Dispatchers.IO) {
+                                                                        runCatching { hybridMediaIndex.ensureFresh(force = true, userInitiated = true) }
+                                                                    }
+                                                                },
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_include_no_media_content_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_include_no_media_content_summary),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                },
+                                                            )
+                            }
 
                             Column(modifier = Modifier.fillMaxWidth()) {
                                 TextButton(
@@ -649,20 +738,22 @@ object AppearancePreferencesScreen : Screen {
                             PreferenceDivider()
 
                             val showTreeViewPath by browserPreferences.showTreeViewPath.collectAsState()
-                            SwitchPreference(
-                                value = showTreeViewPath,
-                                onValueChange = { browserPreferences.showTreeViewPath.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_show_tree_view_path_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_show_tree_view_path_summary),
-                                    )
-                                }
-                            )
+                            HighlightablePreference(R.string.pref_show_tree_view_path_title) {
+                                SwitchPreference(
+                                                                value = showTreeViewPath,
+                                                                onValueChange = { browserPreferences.showTreeViewPath.set(it) },
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_show_tree_view_path_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_show_tree_view_path_summary),
+                                                                    )
+                                                                }
+                                                            )
+                            }
                         }
                     }
 
@@ -673,44 +764,48 @@ object AppearancePreferencesScreen : Screen {
                     item {
                         PreferenceCard {
                             val tapThumbnailToSelect by gesturePreferences.tapThumbnailToSelect.collectAsState()
-                            SwitchPreference(
-                                value = tapThumbnailToSelect,
-                                onValueChange = { gesturePreferences.tapThumbnailToSelect.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_gesture_tap_thumbnail_to_select_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_gesture_tap_thumbnail_to_select_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            )
+                            HighlightablePreference(R.string.pref_gesture_tap_thumbnail_to_select_title) {
+                                SwitchPreference(
+                                                                value = tapThumbnailToSelect,
+                                                                onValueChange = { gesturePreferences.tapThumbnailToSelect.set(it) },
+                                                                title = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_gesture_tap_thumbnail_to_select_title),
+                                                                    )
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_gesture_tap_thumbnail_to_select_summary),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                }
+                                                            )
+                            }
 
                             PreferenceDivider()
 
                             val showNetworkThumbnails by preferences.showNetworkThumbnails.collectAsState()
-                            SwitchPreference(
-                                value = showNetworkThumbnails,
-                                onValueChange = { newValue ->
-                                    if (newValue) {
-                                        showNetworkWarning = true
-                                    } else {
-                                        preferences.showNetworkThumbnails.set(false)
-                                    }
-                                },
-                                title = {
-                                    Text(text = stringResource(id = R.string.pref_appearance_show_network_thumbnails_title))
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_show_network_thumbnails_summary),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                }
-                            )
+                            HighlightablePreference(R.string.pref_appearance_show_network_thumbnails_title) {
+                                SwitchPreference(
+                                                                value = showNetworkThumbnails,
+                                                                onValueChange = { newValue ->
+                                                                    if (newValue) {
+                                                                        showNetworkWarning = true
+                                                                    } else {
+                                                                        preferences.showNetworkThumbnails.set(false)
+                                                                    }
+                                                                },
+                                                                title = {
+                                                                    Text(text = stringResource(id = R.string.pref_appearance_show_network_thumbnails_title))
+                                                                },
+                                                                summary = {
+                                                                    Text(
+                                                                        text = stringResource(id = R.string.pref_appearance_show_network_thumbnails_summary),
+                                                                        color = MaterialTheme.colorScheme.outline,
+                                                                    )
+                                                                }
+                                                            )
+                            }
 
                             if (showNetworkWarning) {
                                 AlertDialog(
@@ -841,32 +936,34 @@ object AppearancePreferencesScreen : Screen {
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                SliderPreference(
-                                    modifier = Modifier.weight(1f),
-                                    value = thumbnailPositionPercent.toFloat(),
-                                    onValueChange = { finalValue ->
-                                        val newInt = finalValue.roundToInt()
-                                        if (newInt != thumbnailPositionPercent) {
-                                            pendingPositionChange = newInt
-                                        }
-                                    },
-                                    sliderValue = draftPosition,
-                                    onSliderValueChange = { slidingValue ->
-                                        draftPosition = slidingValue
-                                    },
-                                    title = { Text(text = stringResource(id = R.string.pref_appearance_thumbnail_position_title)) },
-                                    valueRange = 1f..100f,
-                                    summary = {
-                                        Text(
-                                            text = stringResource(
-                                                id = R.string.pref_appearance_thumbnail_position_summary,
-                                                draftPosition.roundToInt(),
-                                            ),
-                                            color = MaterialTheme.colorScheme.outline,
-                                        )
-                                    },
-                                    enabled = isPositionStrategy
-                                )
+                                HighlightablePreference(R.string.pref_appearance_thumbnail_position_title) {
+                                    SliderPreference(
+                                                                        modifier = Modifier.weight(1f),
+                                                                        value = thumbnailPositionPercent.toFloat(),
+                                                                        onValueChange = { finalValue ->
+                                                                            val newInt = finalValue.roundToInt()
+                                                                            if (newInt != thumbnailPositionPercent) {
+                                                                                pendingPositionChange = newInt
+                                                                            }
+                                                                        },
+                                                                        sliderValue = draftPosition,
+                                                                        onSliderValueChange = { slidingValue ->
+                                                                            draftPosition = slidingValue
+                                                                        },
+                                                                        title = { Text(text = stringResource(id = R.string.pref_appearance_thumbnail_position_title)) },
+                                                                        valueRange = 1f..100f,
+                                                                        summary = {
+                                                                            Text(
+                                                                                text = stringResource(
+                                                                                    id = R.string.pref_appearance_thumbnail_position_summary,
+                                                                                    draftPosition.roundToInt(),
+                                                                                ),
+                                                                                color = MaterialTheme.colorScheme.outline,
+                                                                            )
+                                                                        },
+                                                                        enabled = isPositionStrategy
+                                                                    )
+                                }
 
                                 IconButton(
                                     onClick = {

@@ -1009,6 +1009,7 @@ fun AudioPlayerControls(
             displayAsPercentage = displayVolumeAsPercentage,
             isActive = isVolumeSliderInteracting,
             onVolumeChange = { newVol -> viewModel.changeVolumeTo(newVol) },
+            onBoostVolumeChange = { newBoost -> viewModel.changeMPVVolumeTo(100 + newBoost) },
             onInteractionChange = { active ->
                 isVolumeSliderInteracting = active
                 // Reset the auto-hide countdown each time the user starts a new drag.

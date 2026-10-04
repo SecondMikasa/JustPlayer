@@ -40,6 +40,7 @@ class PlaylistViewModel(
   val playlistSortType = browserPreferences.playlistSortType.stateIn(viewModelScope)
   val playlistSortOrder = browserPreferences.playlistSortOrder.stateIn(viewModelScope)
   val playlistLayoutMode = browserPreferences.playlistLayoutMode.stateIn(viewModelScope)
+  val showMusicPlaylistsInMainTab = browserPreferences.showMusicPlaylistsInMainTab.stateIn(viewModelScope)
   val gridColumnsPortrait = browserPreferences.folderGridColumnsPortrait.stateIn(viewModelScope)
   val gridColumnsLandscape = browserPreferences.folderGridColumnsLandscape.stateIn(viewModelScope)
 
@@ -66,13 +67,6 @@ class PlaylistViewModel(
         loadData()
       }
     }
-
-    // Observe music playlist integration preference
-    viewModelScope.launch(Dispatchers.IO) {
-      browserPreferences.showMusicPlaylistsInMainTab.changes().collectLatest {
-        loadData()
-      }
-    }
   }
 
   override fun loadData() {
@@ -83,13 +77,8 @@ class PlaylistViewModel(
         
         val currentSortType = browserPreferences.playlistSortType.get()
         val currentSortOrder = browserPreferences.playlistSortOrder.get()
-        val showMusicPlaylists = browserPreferences.showMusicPlaylistsInMainTab.get()
 
-        // Filter out music playlists if the user toggled them off
-        val filteredPlaylists = if (showMusicPlaylists) playlists
-          else playlists.filter { !it.isMusicPlaylist }
-
-        val playlistsWithCounts = filteredPlaylists.map { playlist ->
+        val playlistsWithCounts = playlists.map { playlist ->
           val count = repository.getPlaylistItemCount(playlist.id)
           PlaylistWithCount(playlist, count)
         }

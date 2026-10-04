@@ -35,6 +35,10 @@ import me.zhanghai.compose.preference.SliderPreference
 import xyz.mpv.rex.ui.preferences.components.SwitchPreference
 import me.zhanghai.compose.preference.TextFieldPreference
 import org.koin.compose.koinInject
+import xyz.mpv.rex.ui.utils.LocalHighlightedPrefKey
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.remember
 
 @Serializable
 object AudioPreferencesScreen : Screen {
@@ -44,6 +48,28 @@ object AudioPreferencesScreen : Screen {
     val context = LocalContext.current
     val backstack = LocalBackStack.current
     val preferences = koinInject<AudioPreferences>()
+    val highlightedKey = LocalHighlightedPrefKey.current
+
+    val prefToItemIndex = remember {
+      mapOf(
+        R.string.pref_audio_pitch_correction_title to 1,
+        R.string.pref_audio_volume_normalization_title to 1,
+        R.string.pref_audio_channels to 1,
+        R.string.pref_audio_volume_boost_cap to 1,
+      )
+    }
+
+    val listState = rememberLazyListState()
+
+    LaunchedEffect(highlightedKey) {
+      if (highlightedKey != null) {
+        val itemIndex = prefToItemIndex[highlightedKey]
+        if (itemIndex != null) {
+          kotlinx.coroutines.delay(150)
+          listState.scrollToItem(itemIndex)
+        }
+      }
+    }
 
     Scaffold(
       topBar = {
@@ -71,6 +97,7 @@ object AudioPreferencesScreen : Screen {
       val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
       ProvidePreferenceLocals {
         LazyColumn(
+          state = listState,
           modifier =
             Modifier
               .fillMaxSize()
@@ -84,68 +111,76 @@ object AudioPreferencesScreen : Screen {
           item {
             PreferenceCard {
           val audioPitchCorrection by preferences.audioPitchCorrection.collectAsState()
-          SwitchPreference(
-            value = audioPitchCorrection,
-            onValueChange = { preferences.audioPitchCorrection.set(it) },
-            title = { Text(stringResource(R.string.pref_audio_pitch_correction_title)) },
-            summary = { 
-              Text(
-                stringResource(R.string.pref_audio_pitch_correction_summary),
-                color = MaterialTheme.colorScheme.outline,
-              ) 
-            },
-          )
+          HighlightablePreference(R.string.pref_audio_pitch_correction_title) {
+            SwitchPreference(
+              value = audioPitchCorrection,
+              onValueChange = { preferences.audioPitchCorrection.set(it) },
+              title = { Text(stringResource(R.string.pref_audio_pitch_correction_title)) },
+              summary = { 
+                Text(
+                  stringResource(R.string.pref_audio_pitch_correction_summary),
+                  color = MaterialTheme.colorScheme.outline,
+                ) 
+              },
+            )
+          }
           
           PreferenceDivider()
           val volumeNormalization by preferences.volumeNormalization.collectAsState()
-          SwitchPreference(
-            value = volumeNormalization,
-            onValueChange = { preferences.volumeNormalization.set(it) },
-            title = { Text(stringResource(R.string.pref_audio_volume_normalization_title)) },
-            summary = { 
-              Text(
-                stringResource(R.string.pref_audio_volume_normalization_summary),
-                color = MaterialTheme.colorScheme.outline,
-              ) 
-            },
-          )
+          HighlightablePreference(R.string.pref_audio_volume_normalization_title) {
+            SwitchPreference(
+              value = volumeNormalization,
+              onValueChange = { preferences.volumeNormalization.set(it) },
+              title = { Text(stringResource(R.string.pref_audio_volume_normalization_title)) },
+              summary = { 
+                Text(
+                  stringResource(R.string.pref_audio_volume_normalization_summary),
+                  color = MaterialTheme.colorScheme.outline,
+                ) 
+              },
+            )
+          }
           
           PreferenceDivider()
           val audioChannel by preferences.audioChannels.collectAsState()
-          ListPreference(
-            value = audioChannel,
-            onValueChange = { preferences.audioChannels.set(it) },
-            values = AudioChannels.entries,
-            valueToText = { AnnotatedString(context.getString(it.title)) },
-            title = { Text(text = stringResource(id = R.string.pref_audio_channels)) },
-            summary = { 
-              Text(
-                text = context.getString(audioChannel.title),
-                color = MaterialTheme.colorScheme.outline,
-              ) 
-            },
-          )
+          HighlightablePreference(R.string.pref_audio_channels) {
+            ListPreference(
+              value = audioChannel,
+              onValueChange = { preferences.audioChannels.set(it) },
+              values = AudioChannels.entries,
+              valueToText = { AnnotatedString(context.getString(it.title)) },
+              title = { Text(text = stringResource(id = R.string.pref_audio_channels)) },
+              summary = { 
+                Text(
+                  text = context.getString(audioChannel.title),
+                  color = MaterialTheme.colorScheme.outline,
+                ) 
+              },
+            )
+          }
           
           PreferenceDivider()
           val volumeBoostCap by preferences.volumeBoostCap.collectAsState()
-          SliderPreference(
-            value = volumeBoostCap.toFloat(),
-            onValueChange = { preferences.volumeBoostCap.set(it.toInt()) },
-            title = { Text(stringResource(R.string.pref_audio_volume_boost_cap)) },
-            valueRange = 0f..200f,
-            summary = {
-              Text(
-                if (volumeBoostCap == 0) {
-                  stringResource(R.string.generic_disabled)
-                } else {
-                  volumeBoostCap.toString()
-                },
-                color = MaterialTheme.colorScheme.outline,
-              )
-            },
-            onSliderValueChange = { preferences.volumeBoostCap.set(it.toInt()) },
-            sliderValue = volumeBoostCap.toFloat(),
-          )
+          HighlightablePreference(R.string.pref_audio_volume_boost_cap) {
+            SliderPreference(
+              value = volumeBoostCap.toFloat(),
+              onValueChange = { preferences.volumeBoostCap.set(it.toInt()) },
+              title = { Text(stringResource(R.string.pref_audio_volume_boost_cap)) },
+              valueRange = 0f..200f,
+              summary = {
+                Text(
+                  if (volumeBoostCap == 0) {
+                    stringResource(R.string.generic_disabled)
+                  } else {
+                    volumeBoostCap.toString()
+                  },
+                  color = MaterialTheme.colorScheme.outline,
+                )
+              },
+              onSliderValueChange = { preferences.volumeBoostCap.set(it.toInt()) },
+              sliderValue = volumeBoostCap.toFloat(),
+            )
+          }
             }
           }
         }

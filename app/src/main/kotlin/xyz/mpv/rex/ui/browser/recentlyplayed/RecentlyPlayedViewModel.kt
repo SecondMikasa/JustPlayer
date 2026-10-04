@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.io.File
@@ -58,6 +59,13 @@ class RecentlyPlayedViewModel(application: Application) :
         // Trigger reload when either database or playlists change
         loadData()
       }.collectLatest { }
+    }
+    
+    // Observe music playlist integration preference
+    viewModelScope.launch(Dispatchers.IO) {
+      browserPreferences.showMusicPlaylistsInMainTab.changes().collectLatest {
+        loadData()
+      }
     }
   }
 
@@ -133,7 +141,15 @@ class RecentlyPlayedViewModel(application: Application) :
           } else null
         }
         
-        val allItems = (videoItems + playlistItems).sortedByDescending { it.timestamp }
+        // Filter playlists based on the music playlist setting
+        val showMusicPlaylists = browserPreferences.showMusicPlaylistsInMainTab.get()
+        val filteredPlaylistItems = if (showMusicPlaylists) {
+          playlistItems
+        } else {
+          playlistItems.filter { !it.playlist.isMusicPlaylist }
+        }
+        
+        val allItems = (videoItems + filteredPlaylistItems).sortedByDescending { it.timestamp }
         _items.value = allItems
         _recentVideos.value = videoItems.map { it.video }
       } catch (e: Exception) {

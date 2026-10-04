@@ -53,6 +53,7 @@ import xyz.mpv.rex.preferences.SeekbarStyle
 import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.utils.LocalBackStack
+import xyz.mpv.rex.ui.utils.LocalHighlightedPrefKey
 import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.ListPreference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
@@ -60,6 +61,8 @@ import xyz.mpv.rex.ui.preferences.components.SwitchPreference
 import me.zhanghai.compose.preference.SliderPreference
 import xyz.mpv.rex.ui.player.controls.components.sheets.toFixed
 import xyz.mpv.rex.ui.preferences.components.PlayerButtonChip
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.lazy.rememberLazyListState
 import org.koin.compose.koinInject
 
 // Enum to identify which region we are editing
@@ -80,6 +83,36 @@ object PlayerControlsPreferencesScreen : Screen {
         val backstack = LocalBackStack.current
         val appearancePrefs = koinInject<AppearancePreferences>()
         val playerPrefs = koinInject<PlayerPreferences>()
+        val highlightedKey = LocalHighlightedPrefKey.current
+
+        val prefToItemIndex = remember {
+            mapOf(
+                R.string.pref_player_white_seekbar_title to 7,
+                R.string.pref_player_show_seekbar_chapters_title to 7,
+                R.string.pref_player_show_seekbar_read_ahead_title to 7,
+                R.string.pref_controls_layout_below_seekbar_title to 9,
+                R.string.pref_appearance_enable_bounce_animation_title to 11,
+                R.string.pref_appearance_hide_player_buttons_background_title to 11,
+                R.string.pref_appearance_enable_glass_player_controls_title to 11,
+                R.string.pref_appearance_enable_glass_seekbar_title to 11,
+                R.string.pref_appearance_player_always_dark_mode_title to 11,
+                R.string.pref_appearance_show_controls_on_play_title to 11,
+                R.string.pref_appearance_player_gradient_opacity_title to 11,
+                R.string.pref_player_display_hide_player_control_time to 11,
+            )
+        }
+
+        val listState = rememberLazyListState()
+
+        LaunchedEffect(highlightedKey) {
+            if (highlightedKey != null) {
+                val itemIndex = prefToItemIndex[highlightedKey]
+                if (itemIndex != null) {
+                    kotlinx.coroutines.delay(150)
+                    listState.scrollToItem(itemIndex)
+                }
+            }
+        }
 
         // Get the current state for all four regions
         val topRState by appearancePrefs.topRightControls.collectAsState()
@@ -145,6 +178,7 @@ object PlayerControlsPreferencesScreen : Screen {
             val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
             ProvidePreferenceLocals {
                 LazyColumn(
+                    state = listState,
                     modifier =
                         Modifier
                             .fillMaxSize()
@@ -252,42 +286,48 @@ object PlayerControlsPreferencesScreen : Screen {
                                 PreferenceDivider()
                             }
 
-                            SwitchPreference(
-                                value = whiteSeekBar,
-                                onValueChange = { playerPrefs.whiteSeekBar.set(it) },
-                                title = {
-                                    Text(text = stringResource(R.string.pref_player_white_seekbar_title))
-                                },
-                                summary = {
-                                    Text(text = stringResource(R.string.pref_player_white_seekbar_summary))
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_player_white_seekbar_title) {
+                                SwitchPreference(
+                                    value = whiteSeekBar,
+                                    onValueChange = { playerPrefs.whiteSeekBar.set(it) },
+                                    title = {
+                                        Text(text = stringResource(R.string.pref_player_white_seekbar_title))
+                                    },
+                                    summary = {
+                                        Text(text = stringResource(R.string.pref_player_white_seekbar_summary))
+                                    },
+                                )
+                            }
 
                             PreferenceDivider()
 
-                            SwitchPreference(
-                                value = showSeekbarChapters,
-                                onValueChange = { playerPrefs.showSeekbarChapters.set(it) },
-                                title = {
-                                    Text(text = stringResource(R.string.pref_player_show_seekbar_chapters_title))
-                                },
-                                summary = {
-                                    Text(text = stringResource(R.string.pref_player_show_seekbar_chapters_summary))
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_player_show_seekbar_chapters_title) {
+                                SwitchPreference(
+                                    value = showSeekbarChapters,
+                                    onValueChange = { playerPrefs.showSeekbarChapters.set(it) },
+                                    title = {
+                                        Text(text = stringResource(R.string.pref_player_show_seekbar_chapters_title))
+                                    },
+                                    summary = {
+                                        Text(text = stringResource(R.string.pref_player_show_seekbar_chapters_summary))
+                                    },
+                                )
+                            }
 
                             PreferenceDivider()
 
-                            SwitchPreference(
-                                value = showSeekbarReadAhead,
-                                onValueChange = { playerPrefs.showSeekbarReadAhead.set(it) },
-                                title = {
-                                    Text(text = stringResource(R.string.pref_player_show_seekbar_read_ahead_title))
-                                },
-                                summary = {
-                                    Text(text = stringResource(R.string.pref_player_show_seekbar_read_ahead_summary))
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_player_show_seekbar_read_ahead_title) {
+                                SwitchPreference(
+                                    value = showSeekbarReadAhead,
+                                    onValueChange = { playerPrefs.showSeekbarReadAhead.set(it) },
+                                    title = {
+                                        Text(text = stringResource(R.string.pref_player_show_seekbar_read_ahead_title))
+                                    },
+                                    summary = {
+                                        Text(text = stringResource(R.string.pref_player_show_seekbar_read_ahead_summary))
+                                    },
+                                )
+                            }
                         }
                     }
 
@@ -298,23 +338,25 @@ object PlayerControlsPreferencesScreen : Screen {
                     item {
                         val bottomControlsBelowSeekbar by playerPrefs.bottomControlsBelowSeekbar.collectAsState()
                         PreferenceCard {
-                            SwitchPreference(
-                                value = bottomControlsBelowSeekbar,
-                                onValueChange = { playerPrefs.bottomControlsBelowSeekbar.set(it) },
-                                title = {
-                                    Text(text = stringResource(R.string.pref_controls_layout_below_seekbar_title))
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(
-                                            if (bottomControlsBelowSeekbar)
-                                                R.string.pref_controls_layout_below_seekbar_summary_true
-                                            else
-                                                R.string.pref_controls_layout_below_seekbar_summary_false
+                            HighlightablePreference(R.string.pref_controls_layout_below_seekbar_title) {
+                                SwitchPreference(
+                                    value = bottomControlsBelowSeekbar,
+                                    onValueChange = { playerPrefs.bottomControlsBelowSeekbar.set(it) },
+                                    title = {
+                                        Text(text = stringResource(R.string.pref_controls_layout_below_seekbar_title))
+                                    },
+                                    summary = {
+                                        Text(
+                                            text = stringResource(
+                                                if (bottomControlsBelowSeekbar)
+                                                    R.string.pref_controls_layout_below_seekbar_summary_true
+                                                else
+                                                    R.string.pref_controls_layout_below_seekbar_summary_false
+                                            )
                                         )
-                                    )
-                                },
-                            )
+                                    },
+                                )
+                            }
                         }
                     }
 
@@ -335,164 +377,180 @@ object PlayerControlsPreferencesScreen : Screen {
                         var customTimeValue by remember { mutableStateOf("") }
 
                         PreferenceCard {
-                            SwitchPreference(
-                                value = enableBounceAnimation,
-                                onValueChange = { appearancePrefs.enableBounceAnimation.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_enable_bounce_animation_title)
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_enable_bounce_animation_summary)
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_enable_bounce_animation_title) {
+                                SwitchPreference(
+                                    value = enableBounceAnimation,
+                                    onValueChange = { appearancePrefs.enableBounceAnimation.set(it) },
+                                    title = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_enable_bounce_animation_title)
+                                        )
+                                    },
+                                    summary = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_enable_bounce_animation_summary)
+                                        )
+                                    },
+                                )
+                            }
 
                             PreferenceDivider()
 
-                            SwitchPreference(
-                                value = hidePlayerButtonsBackground,
-                                onValueChange = { appearancePrefs.hidePlayerButtonsBackground.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_summary),
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_hide_player_buttons_background_title) {
+                                SwitchPreference(
+                                    value = hidePlayerButtonsBackground,
+                                    onValueChange = { appearancePrefs.hidePlayerButtonsBackground.set(it) },
+                                    title = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_title),
+                                        )
+                                    },
+                                    summary = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_hide_player_buttons_background_summary),
+                                        )
+                                    },
+                                )
+                            }
 
                             PreferenceDivider()
 
-                            SwitchPreference(
-                                value = enableGlassPlayerControls,
-                                onValueChange = { appearancePrefs.enableGlassPlayerControls.set(it) },
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_enable_glass_player_controls_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_enable_glass_player_controls_summary),
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_enable_glass_player_controls_title) {
+                                SwitchPreference(
+                                    value = enableGlassPlayerControls,
+                                    onValueChange = { appearancePrefs.enableGlassPlayerControls.set(it) },
+                                    title = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_enable_glass_player_controls_title),
+                                        )
+                                    },
+                                    summary = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_enable_glass_player_controls_summary),
+                                        )
+                                    },
+                                )
+                            }
 
                             PreferenceDivider()
 
-                            SwitchPreference(
-                                value = enableGlassSeekbarBackground,
-                                onValueChange = { appearancePrefs.enableGlassSeekbarBackground.set(it) },
-                                enabled = enableGlassPlayerControls,
-                                title = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_title),
-                                    )
-                                },
-                                summary = {
-                                    Text(
-                                        text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_summary),
-                                    )
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_enable_glass_seekbar_title) {
+                                SwitchPreference(
+                                    value = enableGlassSeekbarBackground,
+                                    onValueChange = { appearancePrefs.enableGlassSeekbarBackground.set(it) },
+                                    enabled = enableGlassPlayerControls,
+                                    title = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_title),
+                                        )
+                                    },
+                                    summary = {
+                                        Text(
+                                            text = stringResource(id = R.string.pref_appearance_enable_glass_seekbar_summary),
+                                        )
+                                    },
+                                )
+                            }
 
                             PreferenceDivider()
 
-                            SwitchPreference(
-                                value = playerAlwaysDarkMode,
-                                onValueChange = { appearancePrefs.playerAlwaysDarkMode.set(it) },
-                                title = {
-                                    Text(text = stringResource(R.string.pref_appearance_player_always_dark_mode_title))
-                                },
-                                summary = {
-                                    Text(text = stringResource(R.string.pref_appearance_player_always_dark_mode_summary))
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_player_always_dark_mode_title) {
+                                SwitchPreference(
+                                    value = playerAlwaysDarkMode,
+                                    onValueChange = { appearancePrefs.playerAlwaysDarkMode.set(it) },
+                                    title = {
+                                        Text(text = stringResource(R.string.pref_appearance_player_always_dark_mode_title))
+                                    },
+                                    summary = {
+                                        Text(text = stringResource(R.string.pref_appearance_player_always_dark_mode_summary))
+                                    },
+                                )
+                            }
 
                             PreferenceDivider()
 
                             val showControlsOnPlay by playerPrefs.showControlsOnPlay.collectAsState()
-                            SwitchPreference(
-                                value = showControlsOnPlay,
-                                onValueChange = { playerPrefs.showControlsOnPlay.set(it) },
-                                title = {
-                                    Text(text = stringResource(R.string.pref_appearance_show_controls_on_play_title))
-                                },
-                                summary = {
-                                    Text(text = stringResource(R.string.pref_appearance_show_controls_on_play_summary))
-                                },
-                            )
+                            HighlightablePreference(R.string.pref_appearance_show_controls_on_play_title) {
+                                SwitchPreference(
+                                    value = showControlsOnPlay,
+                                    onValueChange = { playerPrefs.showControlsOnPlay.set(it) },
+                                    title = {
+                                        Text(text = stringResource(R.string.pref_appearance_show_controls_on_play_title))
+                                    },
+                                    summary = {
+                                        Text(text = stringResource(R.string.pref_appearance_show_controls_on_play_summary))
+                                    },
+                                )
+                            }
 
                             PreferenceDivider()
 
                             val playerGradientOpacity by playerPrefs.playerGradientOpacity.collectAsState()
-                            SliderPreference(
-                                value = playerGradientOpacity,
-                                onValueChange = { playerPrefs.playerGradientOpacity.set(it.toFixed(2)) },
-                                title = { Text(stringResource(R.string.pref_appearance_player_gradient_opacity_title)) },
-                                valueRange = 0f..1f,
-                                summary = {
-                                    val opacityPercent = (playerGradientOpacity * 100).toInt()
-                                    Text(
-                                        text = stringResource(
-                                            R.string.pref_appearance_player_gradient_opacity_current,
-                                            opacityPercent
-                                        ),
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                },
-                                onSliderValueChange = { playerPrefs.playerGradientOpacity.set(it.toFixed(2)) },
-                                sliderValue = playerGradientOpacity,
-                            )
+                            HighlightablePreference(R.string.pref_appearance_player_gradient_opacity_title) {
+                                SliderPreference(
+                                    value = playerGradientOpacity,
+                                    onValueChange = { playerPrefs.playerGradientOpacity.set(it.toFixed(2)) },
+                                    title = { Text(stringResource(R.string.pref_appearance_player_gradient_opacity_title)) },
+                                    valueRange = 0f..1f,
+                                    summary = {
+                                        val opacityPercent = (playerGradientOpacity * 100).toInt()
+                                        Text(
+                                            text = stringResource(
+                                                R.string.pref_appearance_player_gradient_opacity_current,
+                                                opacityPercent
+                                            ),
+                                            color = MaterialTheme.colorScheme.outline,
+                                        )
+                                    },
+                                    onSliderValueChange = { playerPrefs.playerGradientOpacity.set(it.toFixed(2)) },
+                                    sliderValue = playerGradientOpacity,
+                                )
+                            }
 
                             PreferenceDivider()
 
-                            ListPreference(
-                                value = if (isCustomTimeValue) -1 else playerTimeToDisappear,
-                                onValueChange = { newValue ->
-                                    if (newValue == -1) {
-                                        customTimeValue = playerTimeToDisappear.toString()
-                                        showCustomTimeDialog = true
-                                    } else {
-                                        playerPrefs.playerTimeToDisappear.set(newValue)
-                                    }
-                                },
-                                values = predefinedTimeValues + listOf(-1),
-                                valueToText = { value ->
-                                    // NOTE (#20 - not touched): needs confirmation whether this
-                                    // lambda runs in a @Composable scope in this version of
-                                    // me.zhanghai.compose.preference before calling
-                                    // stringResource() here. Left as literal for now.
-                                    if (value == -1) {
-                                        AnnotatedString("Custom")
-                                    } else {
-                                        AnnotatedString("$value ms")
-                                    }
-                                },
-                                title = { Text(text = stringResource(R.string.pref_player_display_hide_player_control_time)) },
-                                summary = {
-                                    Text(
-                                        text = if (isCustomTimeValue) {
-                                            stringResource(
-                                                R.string.pref_player_display_custom_time_summary,
-                                                playerTimeToDisappear
-                                            )
+                            HighlightablePreference(R.string.pref_player_display_hide_player_control_time) {
+                                ListPreference(
+                                    value = if (isCustomTimeValue) -1 else playerTimeToDisappear,
+                                    onValueChange = { newValue ->
+                                        if (newValue == -1) {
+                                            customTimeValue = playerTimeToDisappear.toString()
+                                            showCustomTimeDialog = true
                                         } else {
-                                            stringResource(
-                                                R.string.pref_player_display_time_ms_format,
-                                                playerTimeToDisappear
-                                            )
-                                        },
-                                        color = MaterialTheme.colorScheme.outline,
-                                    )
-                                },
-                            )
+                                            playerPrefs.playerTimeToDisappear.set(newValue)
+                                        }
+                                    },
+                                    values = predefinedTimeValues + listOf(-1),
+                                    valueToText = { value ->
+                                        // NOTE (#20 - not touched): needs confirmation whether this
+                                        // lambda runs in a @Composable scope in this version of
+                                        // me.zhanghai.compose.preference before calling
+                                        // stringResource() here. Left as literal for now.
+                                        if (value == -1) {
+                                            AnnotatedString("Custom")
+                                        } else {
+                                            AnnotatedString("$value ms")
+                                        }
+                                    },
+                                    title = { Text(text = stringResource(R.string.pref_player_display_hide_player_control_time)) },
+                                    summary = {
+                                        Text(
+                                            text = if (isCustomTimeValue) {
+                                                stringResource(
+                                                    R.string.pref_player_display_custom_time_summary,
+                                                    playerTimeToDisappear
+                                                )
+                                            } else {
+                                                stringResource(
+                                                    R.string.pref_player_display_time_ms_format,
+                                                    playerTimeToDisappear
+                                                )
+                                            },
+                                            color = MaterialTheme.colorScheme.outline,
+                                        )
+                                    },
+                                )
+                            }
                         }
 
                         if (showCustomTimeDialog) {
