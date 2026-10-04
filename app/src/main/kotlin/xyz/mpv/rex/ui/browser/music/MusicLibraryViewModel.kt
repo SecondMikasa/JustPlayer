@@ -36,12 +36,21 @@ private fun Video.albumKey(): Long = albumId.takeIf { it != 0L } ?: (album to ar
 
 private fun Video.artistKey(): String = artist.ifBlank { "Unknown Artist" }
 
+/**
+ * Data class to hold song with playback progress information
+ */
+data class SongWithProgress(
+  val song: Video,
+  val progressPercentage: Float? = null, // 0.0 to 1.0
+)
+
 class MusicLibraryViewModel(
   application: Application,
 ) : BaseBrowserViewModel<Video>(application),
   KoinComponent {
   private val hybridMediaIndexRepository: HybridMediaIndexRepository by inject()
   private val browserPreferences: xyz.mpv.rex.preferences.BrowserPreferences by inject()
+  private val playbackStateRepository: xyz.mpv.rex.database.repository.PlaybackStateRepository by inject()
 
   /** All audio items, alias of the base class's [items] for readability at call sites. */
   val songs: StateFlow<List<Video>> = items
@@ -57,6 +66,10 @@ class MusicLibraryViewModel(
 
   private val _searchQuery = MutableStateFlow("")
   val searchQuery: StateFlow<String> = _searchQuery.asStateFlow()
+
+  /** Map of song IDs to their playback progress (0.0 to 1.0) */
+  private val _songProgress = MutableStateFlow<Map<Long, Float>>(emptyMap())
+  val songProgress: StateFlow<Map<Long, Float>> = _songProgress.asStateFlow()
 
   /** Songs filtered by [searchQuery] and sorted by [sortField]/[sortOrder]. */
   val filteredSongs: StateFlow<List<Video>> =
@@ -170,6 +183,28 @@ class MusicLibraryViewModel(
 
   init {
     loadData()
+    observePlaybackProgress()
+  }
+
+  private fun observePlaybackProgress() {
+    viewModelScope.launch(Dispatchers.IO) {
+      songs.collectLatest { allSongs ->
+        val progressMap = mutableMapOf<Long, Float>()
+        allSongs.forEach { song ->
+          val fileName = java.io.File(song.path).name
+          val playbackState = playbackStateRepository.getVideoDataByTitle(fileName)
+          if (playbackState != null && song.duration > 0) {
+            val durationSeconds = song.duration / 1000
+            val watched = durationSeconds - playbackState.timeRemaining.toLong()
+            val progressValue = (watched.toFloat() / durationSeconds.toFloat()).coerceIn(0f, 1f)
+            if (progressValue in 0.01f..0.99f) {
+              progressMap[song.id] = progressValue
+            }
+          }
+        }
+        _songProgress.value = progressMap
+      }
+    }
   }
 
   override fun loadData() {

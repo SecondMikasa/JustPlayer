@@ -40,12 +40,15 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
@@ -563,7 +566,10 @@ fun PlayerControls(
           exit = fadeOut(playerControlsExitAnimationSpec()),
           modifier =
             Modifier
-              .windowInsetsPadding(WindowInsets.statusBars)
+              .windowInsetsPadding(
+                if (isPortrait) WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
+                else WindowInsets.statusBars
+              )
               .constrainAs(playerUpdates) {
                 linkTo(parent.start, parent.end)
                 top.linkTo(parent.top, margin = osdTopMargin)
@@ -1218,16 +1224,18 @@ fun PlayerControls(
               val totalDuration = if (preciseDuration > 0) preciseDuration else duration?.toFloat() ?: 0f
               val isBuffering = cacheBufferingState ?: 0
 
-              // If cache duration is available and valid, use it (up to 60 seconds)
-              if (cacheDuration > 0.1f) {
-                (currentPos + cacheDuration).coerceAtMost(totalDuration)
-              } else if (isBuffering > 0 && isBuffering < 100) {
-                // Show estimated buffer when actively buffering (up to 60 seconds)
-                val estimatedBuffer = (isBuffering / 100f) * 60f
-                (currentPos + estimatedBuffer).coerceAtMost(totalDuration)
-              } else {
-                // When not actively buffering and cache is full, show 1 minute buffer
-                (currentPos + 60f).coerceAtMost(totalDuration)
+              when {
+                // File is fully cached — fill the bar to the end
+                isBuffering >= 100 -> totalDuration
+                // Active cache data is available — show real cache end position
+                cacheDuration > 0.1f -> (currentPos + cacheDuration).coerceAtMost(totalDuration)
+                // Actively buffering but no cache-duration yet — estimate from buffering %
+                isBuffering in 1..99 -> {
+                  val estimatedBuffer = (isBuffering / 100f) * 60f
+                  (currentPos + estimatedBuffer).coerceAtMost(totalDuration)
+                }
+                // No cache data at all — show no buffer (fall back to position so bar is invisible)
+                else -> currentPos
               }
             }
           }
@@ -1307,7 +1315,10 @@ fun PlayerControls(
             },
           modifier =
             Modifier
-              .windowInsetsPadding(WindowInsets.statusBars)
+              .windowInsetsPadding(
+                if (isPortrait) WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
+                else WindowInsets.statusBars
+              )
               .then(
                 if (showSystemNavigationBar) {
                   val navBarPadding = WindowInsets.navigationBars.asPaddingValues()
@@ -1369,7 +1380,10 @@ fun PlayerControls(
             },
           modifier =
             Modifier
-              .windowInsetsPadding(WindowInsets.statusBars)
+              .windowInsetsPadding(
+                if (isPortrait) WindowInsets.safeDrawing.only(WindowInsetsSides.Top)
+                else WindowInsets.statusBars
+              )
               .then(
                 if (showSystemNavigationBar) {
                   val navBarPadding = WindowInsets.navigationBars.asPaddingValues()

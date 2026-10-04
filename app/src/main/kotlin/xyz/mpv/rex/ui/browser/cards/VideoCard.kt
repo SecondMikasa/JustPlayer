@@ -196,27 +196,89 @@ fun VideoCard(
       }
     },
     chipsContent = {
-      if (showSubtitleIndicator && video.hasEmbeddedSubtitles && video.subtitleCodec.isNotBlank()) {
-        video.subtitleCodec.split(" ").forEach { codec ->
-          Text(
-            text = codec,
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier
-              .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
-              .padding(horizontal = 8.dp, vertical = 4.dp),
-            color = MaterialTheme.colorScheme.onPrimary,
-          )
+      // Codec Indicator: Show audio codec for audio files, subtitle codec for video files
+      if (showSubtitleIndicator) {
+        if (video.isAudio && video.mimeType.isNotBlank()) {
+          // Extract audio codec from mimeType (e.g., "audio/mpeg" -> "MP3", "audio/flac" -> "FLAC")
+          val audioCodec = when {
+            video.mimeType.contains("mpeg", ignoreCase = true) || 
+            video.mimeType.contains("mp3", ignoreCase = true) -> "MP3"
+            video.mimeType.contains("flac", ignoreCase = true) -> "FLAC"
+            video.mimeType.contains("ogg", ignoreCase = true) -> "OGG"
+            video.mimeType.contains("opus", ignoreCase = true) -> "OPUS"
+            video.mimeType.contains("aac", ignoreCase = true) -> "AAC"
+            video.mimeType.contains("m4a", ignoreCase = true) -> "M4A"
+            video.mimeType.contains("wav", ignoreCase = true) -> "WAV"
+            video.mimeType.contains("wma", ignoreCase = true) -> "WMA"
+            video.mimeType.contains("alac", ignoreCase = true) -> "ALAC"
+            video.mimeType.contains("ape", ignoreCase = true) -> "APE"
+            video.mimeType.contains("webm", ignoreCase = true) -> "WEBM"
+            video.mimeType.contains("amr", ignoreCase = true) -> "AMR"
+            else -> {
+              // Extract last part after "/" and convert to uppercase
+              video.mimeType.substringAfterLast("/", "").uppercase().take(5)
+            }
+          }
+          if (audioCodec.isNotBlank()) {
+            Text(
+              text = audioCodec,
+              style = MaterialTheme.typography.labelSmall,
+              modifier = Modifier
+                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+              color = MaterialTheme.colorScheme.onPrimary,
+            )
+          }
+        } else if (video.hasEmbeddedSubtitles && video.subtitleCodec.isNotBlank()) {
+          // Show subtitle codecs for video files
+          video.subtitleCodec.split(" ").forEach { codec ->
+            Text(
+              text = codec,
+              style = MaterialTheme.typography.labelSmall,
+              modifier = Modifier
+                .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+              color = MaterialTheme.colorScheme.onPrimary,
+            )
+          }
         }
       }
       if (uiSettings.showSizeChip && video.sizeFormatted != "0 B" && video.sizeFormatted != "--") {
         MediaMetadataChip(text = video.sizeFormatted)
       }
-      val fpsOnly = video.resolution.substringAfter("@", "")
-      if (uiSettings.showResolutionChip && video.resolution != "--") {
-        val displayRes = if (uiSettings.showFramerateInResolution) video.resolution else video.resolution.substringBefore("@")
-        MediaMetadataChip(text = displayRes)
-      } else if (uiSettings.showFramerateInResolution && fpsOnly.isNotEmpty()) {
-        MediaMetadataChip(text = "$fpsOnly FPS")
+      // Format: Show audio format for audio files, resolution for video files
+      if (uiSettings.showResolutionChip) {
+        if (video.isAudio && video.mimeType.isNotBlank()) {
+          // For audio files, show the format from mimeType
+          val audioFormat = when {
+            video.mimeType.contains("mpeg", ignoreCase = true) || 
+            video.mimeType.contains("mp3", ignoreCase = true) -> "MP3"
+            video.mimeType.contains("flac", ignoreCase = true) -> "FLAC"
+            video.mimeType.contains("ogg", ignoreCase = true) -> "OGG"
+            video.mimeType.contains("opus", ignoreCase = true) -> "OPUS"
+            video.mimeType.contains("aac", ignoreCase = true) -> "AAC"
+            video.mimeType.contains("m4a", ignoreCase = true) -> "M4A"
+            video.mimeType.contains("wav", ignoreCase = true) -> "WAV"
+            video.mimeType.contains("wma", ignoreCase = true) -> "WMA"
+            video.mimeType.contains("alac", ignoreCase = true) -> "ALAC"
+            video.mimeType.contains("ape", ignoreCase = true) -> "APE"
+            video.mimeType.contains("webm", ignoreCase = true) -> "WEBM"
+            video.mimeType.contains("amr", ignoreCase = true) -> "AMR"
+            else -> video.mimeType.substringAfterLast("/", "").uppercase().take(8)
+          }
+          if (audioFormat.isNotBlank()) {
+            MediaMetadataChip(text = audioFormat)
+          }
+        } else if (video.resolution != "--") {
+          // For video files, show resolution
+          val displayRes = if (uiSettings.showFramerateInResolution) video.resolution else video.resolution.substringBefore("@")
+          MediaMetadataChip(text = displayRes)
+        } else {
+          val fpsOnly = video.resolution.substringAfter("@", "")
+          if (uiSettings.showFramerateInResolution && fpsOnly.isNotEmpty()) {
+            MediaMetadataChip(text = "$fpsOnly FPS")
+          }
+        }
       }
       if (uiSettings.showDateChip && video.dateModified > 0) {
         MediaMetadataChip(text = MediaFormatter.formatDate(video.dateModified * 1000))

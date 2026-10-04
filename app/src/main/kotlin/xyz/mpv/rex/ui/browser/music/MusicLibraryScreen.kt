@@ -90,6 +90,7 @@ object MusicLibraryScreen : Screen {
     val sortField      by viewModel.sortField.collectAsState()
     val sortOrder      by viewModel.sortOrder.collectAsState()
     val uiSettings     by viewModel.uiSettings.collectAsState()
+    val songProgress   by viewModel.songProgress.collectAsState()
 
     val musicLayoutMode by browserPreferences.musicLayoutMode.collectAsState()
     val musicCoverArtSize by browserPreferences.musicCoverArtSize.collectAsState()
@@ -313,6 +314,7 @@ object MusicLibraryScreen : Screen {
                 layoutMode = musicLayoutMode,
                 coverArtSize = musicCoverArtSize,
                 onSongClick = { song -> playSongWithQueue(song, songs) },
+                songProgress = songProgress,
               )
             }
             openArtist != null -> {
@@ -324,6 +326,7 @@ object MusicLibraryScreen : Screen {
                 layoutMode = musicLayoutMode,
                 coverArtSize = musicCoverArtSize,
                 onSongClick = { song -> playSongWithQueue(song, songs) },
+                songProgress = songProgress,
               )
             }
             openFolder != null -> {
@@ -335,6 +338,7 @@ object MusicLibraryScreen : Screen {
                 layoutMode = musicLayoutMode,
                 coverArtSize = musicCoverArtSize,
                 onSongClick = { song -> playSongWithQueue(song, songs) },
+                songProgress = songProgress,
               )
             }
             isLoading && filteredSongs.isEmpty() ->
@@ -354,6 +358,7 @@ object MusicLibraryScreen : Screen {
                     layoutMode = musicLayoutMode,
                     coverArtSize = musicCoverArtSize,
                     onSongClick = { song -> playSongWithQueue(song, filteredSongs) },
+                    songProgress = songProgress,
                   )
                   MusicTab.ALBUMS -> AlbumGrid(albums = albums, layoutMode = musicLayoutMode, coverArtSize = musicCoverArtSize, onAlbumClick = { openAlbum = it })
                   MusicTab.ARTISTS -> ArtistList(artists = artists, layoutMode = musicLayoutMode, coverArtSize = musicCoverArtSize, onArtistClick = { openArtist = it })
@@ -519,6 +524,7 @@ private fun SongList(
   layoutMode: MediaLayoutMode = MediaLayoutMode.LIST,
   coverArtSize: Int = 56,
   onSongClick: (Video) -> Unit,
+  songProgress: Map<Long, Float> = emptyMap(),
 ) {
   if (songs.isEmpty()) {
     EmptyState(text = stringResource(R.string.no_songs_found))
@@ -552,6 +558,7 @@ private fun SongList(
           isGridMode = true,
           gridColumns = 2,
           thumbnailSize = (coverArtSize * 2.2f).dp,
+          progressPercentage = songProgress[song.id],
           modifier = Modifier.fillMaxWidth(),
         )
       }
@@ -576,6 +583,7 @@ private fun SongList(
           isSelected = isSelected,
           uiSettings = uiSettings,
           thumbnailSize = coverArtSize.dp,
+          progressPercentage = songProgress[song.id],
           modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 8.dp, vertical = 2.dp),
