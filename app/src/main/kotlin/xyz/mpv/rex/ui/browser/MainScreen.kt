@@ -19,10 +19,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -53,6 +55,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -344,10 +347,15 @@ private fun FloatingPillBottomBar(
   onTabSelected: (Int, VisibleTab) -> Unit,
   modifier: Modifier = Modifier,
 ) {
+  val tabCount = visibleTabs.size
+  val maxPillWidth = (tabCount * 76).dp
+
   Surface(
     modifier = modifier
-      .padding(horizontal = 16.dp, vertical = 8.dp)
-      .navigationBarsPadding(),
+      .padding(horizontal = 12.dp, vertical = 8.dp)
+      .navigationBarsPadding()
+      .widthIn(max = maxPillWidth)
+      .fillMaxWidth(),
     shape = RoundedCornerShape(36.dp),
     color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
     tonalElevation = 6.dp,
@@ -359,8 +367,9 @@ private fun FloatingPillBottomBar(
   ) {
     Row(
       modifier = Modifier
-        .padding(horizontal = 6.dp, vertical = 6.dp),
-      horizontalArrangement = Arrangement.spacedBy(4.dp),
+        .fillMaxWidth()
+        .padding(horizontal = 4.dp, vertical = 4.dp),
+      horizontalArrangement = Arrangement.spacedBy(2.dp),
       verticalAlignment = Alignment.CenterVertically,
     ) {
       visibleTabs.forEachIndexed { index, tab ->
@@ -379,6 +388,7 @@ private fun FloatingPillBottomBar(
 
         Box(
           modifier = Modifier
+            .weight(1f)
             .clip(RoundedCornerShape(26.dp))
             .background(animatedBgColor)
             .clickable(
@@ -386,12 +396,13 @@ private fun FloatingPillBottomBar(
               indication = ripple(bounded = true, radius = 32.dp),
               onClick = { onTabSelected(index, tab) },
             )
-            .padding(horizontal = 14.dp, vertical = 6.dp),
+            .padding(horizontal = 2.dp, vertical = 6.dp),
           contentAlignment = Alignment.Center,
         ) {
           Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
+            modifier = Modifier.fillMaxWidth(),
           ) {
             Icon(
               imageVector = tab.icon,
@@ -406,6 +417,8 @@ private fun FloatingPillBottomBar(
               fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
               color = contentColor,
               maxLines = 1,
+              overflow = TextOverflow.Ellipsis,
+              softWrap = false,
             )
           }
         }

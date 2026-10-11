@@ -1032,30 +1032,25 @@ class PlayerActivity :
       window.statusBarColor = android.graphics.Color.TRANSPARENT
     }
 
-    // Always start with status bar hidden for videos - it will show when controls are shown
+    // Always start with status bar and navigation bar hidden for videos
     if (!isCurrentMediaAudio()) {
-      try {
-        windowInsetsController.apply {
-          hide(WindowInsetsCompat.Type.statusBars())
-          hide(WindowInsetsCompat.Type.navigationBars())
-          systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        }
-      } catch (e: Exception) {
-        Log.e(TAG, "Failed to setup system UI insets", e)
-      }
-    }
-
-    // Modern insets handle fullscreen and immersive modes.
-    // We only need layout stable to ensure our UI doesn't jump wildly if we don't want it to,
-    // though setDecorFitsSystemWindows(false) already handles most of this.
-    @Suppress("DEPRECATION")
-    if (!isCurrentMediaAudio()) {
-      binding.root.systemUiVisibility =
-        View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
-          View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
-          View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+      syncSystemBars(
+        showStatusBar = false,
+        showNavBar = false,
+      )
     } else {
+      @Suppress("DEPRECATION")
       binding.root.systemUiVisibility = View.SYSTEM_UI_FLAG_LAYOUT_STABLE
+    }
+  }
+
+  override fun onWindowFocusChanged(hasFocus: Boolean) {
+    super.onWindowFocusChanged(hasFocus)
+    if (hasFocus && !isCurrentMediaAudio()) {
+      syncSystemBars(
+        showStatusBar = if (viewModel.controlsShown.value) playerPreferences.showSystemStatusBar.get() else false,
+        showNavBar = if (viewModel.controlsShown.value) playerPreferences.showSystemNavigationBar.get() else false,
+      )
     }
   }
 
@@ -3547,6 +3542,43 @@ class PlayerActivity :
     set(value) {
       requestedOrientation = value
     }
+
+  override fun syncSystemBars(showStatusBar: Boolean, showNavBar: Boolean) {
+    if (isCurrentMediaAudio()) return
+    try {
+      windowInsetsController.systemBarsBehavior =
+        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+
+      if (showStatusBar) {
+        windowInsetsController.show(WindowInsetsCompat.Type.statusBars())
+        windowInsetsController.isAppearanceLightStatusBars = false
+      } else {
+        windowInsetsController.hide(WindowInsetsCompat.Type.statusBars())
+      }
+
+      if (showNavBar) {
+        windowInsetsController.show(WindowInsetsCompat.Type.navigationBars())
+      } else {
+        windowInsetsController.hide(WindowInsetsCompat.Type.navigationBars())
+      }
+
+      @Suppress("DEPRECATION")
+      var flags = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
+        View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
+        View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or
+        View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
+
+      if (!showStatusBar) {
+        flags = flags or View.SYSTEM_UI_FLAG_FULLSCREEN
+      }
+      if (!showNavBar) {
+        flags = flags or View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+      }
+      binding.root.systemUiVisibility = flags
+    } catch (e: Exception) {
+      Log.e(TAG, "Failed to sync system bars", e)
+    }
+  }
 
   // ==================== ServiceListener ====================
 

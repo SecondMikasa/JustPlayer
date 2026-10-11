@@ -23,4 +23,6 @@ interface PlayerHost {
   
   fun requestAudioFocus(): Boolean
   fun abandonAudioFocus()
+
+  fun syncSystemBars(showStatusBar: Boolean, showNavBar: Boolean)
 }
