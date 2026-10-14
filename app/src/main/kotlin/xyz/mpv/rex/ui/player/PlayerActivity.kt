@@ -2042,6 +2042,7 @@ class PlayerActivity :
     }
 
     applySubtitlePreferences()
+    viewModel.applyAudioFilters()
 
     // Don't force media-title for standalone m3u/m3u8 streams - let MPV provide it
     // But if we are playing from an M3U playlist with custom titles, we MUST set it

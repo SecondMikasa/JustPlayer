@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.PlaylistPlay
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -65,8 +66,10 @@ fun AddToPlaylistDialog(
 ) {
   val repository = koinInject<PlaylistRepository>()
   val playlistsFromDb by repository.observeAllPlaylists().collectAsState(initial = emptyList())
-  val playlists = remember(playlistsFromDb) {
-    playlistsFromDb.sortedBy { it.name.lowercase() }
+  val playlists = remember(playlistsFromDb, isMusicContext) {
+    playlistsFromDb
+      .filter { if (isMusicContext) it.isMusicPlaylist else !it.isMusicPlaylist }
+      .sortedBy { it.name.lowercase() }
   }
   val scope = rememberCoroutineScope()
   var showCreateDialog by remember { mutableStateOf(false) }
@@ -84,10 +87,18 @@ fun AddToPlaylistDialog(
             video.path to video.displayName
           }
           repository.addItemsToPlaylist(playlistId.toInt(), items)
-          val message = if (videos.size == 1) {
-            context.getString(R.string.video_added_to, name)
+          val message = if (isMusicContext) {
+            if (videos.size == 1) {
+              context.getString(R.string.song_added_to, name)
+            } else {
+              context.getString(R.string.n_songs_added_to, videos.size, name)
+            }
           } else {
-            context.getString(R.string.n_videos_added_to, videos.size, name)
+            if (videos.size == 1) {
+              context.getString(R.string.video_added_to, name)
+            } else {
+              context.getString(R.string.n_videos_added_to, videos.size, name)
+            }
           }
           Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
           showCreateDialog = false
@@ -113,12 +124,20 @@ fun AddToPlaylistDialog(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(16.dp),
       ) {
-        // Show video count
+        // Show video / song count
         Text(
-          text = if (videos.size == 1) {
-            stringResource(R.string.adding_one_video_to_playlist)
+          text = if (isMusicContext) {
+            if (videos.size == 1) {
+              stringResource(R.string.adding_one_song_to_playlist)
+            } else {
+              stringResource(R.string.adding_n_songs_to_playlist, videos.size)
+            }
           } else {
-            stringResource(R.string.adding_n_videos_to_playlist, videos.size)
+            if (videos.size == 1) {
+              stringResource(R.string.adding_one_video_to_playlist)
+            } else {
+              stringResource(R.string.adding_n_videos_to_playlist, videos.size)
+            }
           },
           style = MaterialTheme.typography.bodyMedium,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -166,12 +185,22 @@ fun AddToPlaylistDialog(
                       video.path to video.displayName
                     }
                     repository.addItemsToPlaylist(playlist.id, items)
-                    val message = if (videos.size == 1) {
-                      context.getString(R.string.video_added_to, playlist.name)
+                    val message = if (isMusicContext) {
+                      if (videos.size == 1) {
+                        context.getString(R.string.song_added_to, playlist.name)
+                      } else {
+                        context.getString(R.string.n_songs_added_to, videos.size, playlist.name)
+                      }
                     } else {
-                      context.getString(R.string.n_videos_added_to, videos.size, playlist.name)
+                      if (videos.size == 1) {
+                        context.getString(R.string.video_added_to, playlist.name)
+                      } else {
+                        context.getString(R.string.n_videos_added_to, videos.size, playlist.name)
+                      }
                     }
                     Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                    onSuccess()
+                    onDismiss()
                   }
                 },
               )
@@ -236,7 +265,7 @@ private fun PlaylistItemCard(
       verticalAlignment = Alignment.CenterVertically,
     ) {
       Icon(
-        imageVector = Icons.AutoMirrored.Filled.PlaylistPlay,
+        imageVector = if (playlist.isMusicPlaylist) Icons.Filled.MusicNote else Icons.AutoMirrored.Filled.PlaylistPlay,
         contentDescription = null,
         modifier = Modifier.size(40.dp),
         tint = MaterialTheme.colorScheme.primary,
@@ -254,7 +283,11 @@ private fun PlaylistItemCard(
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-          text = stringResource(R.string.playlist_videos_count, itemCount, formatDate(playlist.updatedAt)),
+          text = if (playlist.isMusicPlaylist) {
+            stringResource(R.string.playlist_songs_count, itemCount, formatDate(playlist.updatedAt))
+          } else {
+            stringResource(R.string.playlist_videos_count, itemCount, formatDate(playlist.updatedAt))
+          },
           style = MaterialTheme.typography.bodySmall,
           color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

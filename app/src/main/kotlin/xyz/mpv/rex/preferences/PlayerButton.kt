@@ -20,6 +20,7 @@ import androidx.compose.material.icons.outlined.Flip
 import androidx.compose.material.icons.outlined.Repeat
 import androidx.compose.material.icons.outlined.ZoomIn
 import androidx.compose.material.icons.outlined.FastForward
+import androidx.compose.material.icons.outlined.FastRewind
 import androidx.compose.material.icons.outlined.Shuffle
 import androidx.compose.material.icons.outlined.Headset
 import androidx.compose.material.icons.outlined.BlurOn
@@ -50,13 +51,14 @@ enum class PlayerButton(
   AUDIO_TRACK(Icons.Outlined.Audiotrack),
   SUBTITLES(Icons.Outlined.Subtitles),
   MORE_OPTIONS(Icons.Outlined.MoreVert),
-  CURRENT_CHAPTER(Icons.Outlined.Bookmarks), // <-- CHANGED ICON
+  CURRENT_CHAPTER(Icons.Outlined.Bookmarks),
   REPEAT_MODE(Icons.Outlined.Repeat),
   SHUFFLE(Icons.Outlined.Shuffle),
   MIRROR(Icons.Outlined.Flip),
   VERTICAL_FLIP(Icons.Outlined.Flip),
   AB_LOOP(Icons.AutoMirrored.Outlined.Segment),
   CUSTOM_SKIP(Icons.Outlined.FastForward),
+  CUSTOM_SKIP_BACK(Icons.Outlined.FastRewind),
   BACKGROUND_PLAYBACK(Icons.Outlined.Headset),
   AMBIENT_MODE(Icons.Outlined.BlurOn),
   SLEEP_TIMER(Icons.Outlined.Timer),
@@ -102,6 +104,7 @@ fun getPlayerButtonLabel(button: PlayerButton): String =
     PlayerButton.VERTICAL_FLIP -> stringResource(R.string.btn_label_vertical_flip)
     PlayerButton.AB_LOOP -> stringResource(R.string.btn_label_ab_loop)
     PlayerButton.CUSTOM_SKIP -> stringResource(R.string.btn_label_custom_skip)
+    PlayerButton.CUSTOM_SKIP_BACK -> stringResource(R.string.btn_label_custom_skip_back)
     PlayerButton.BACKGROUND_PLAYBACK -> stringResource(R.string.btn_label_background_playback)
     PlayerButton.AMBIENT_MODE -> stringResource(R.string.btn_label_ambient_mode)
     PlayerButton.SLEEP_TIMER -> stringResource(R.string.btn_label_sleep_timer)

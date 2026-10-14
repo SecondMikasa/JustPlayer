@@ -14,19 +14,17 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import xyz.mpv.rex.ui.components.IconSwitch
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -36,7 +34,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
@@ -46,6 +43,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import xyz.mpv.rex.presentation.components.PlayerSheet
 import xyz.mpv.rex.ui.player.EqualizerPreset
 import xyz.mpv.rex.ui.player.EqualizerState
 import kotlin.math.roundToInt
@@ -54,7 +52,6 @@ val EQ_BAND_LABELS = listOf("60Hz", "230Hz", "910Hz", "3.6kHz", "14kHz")
 const val EQ_MIN_DB = -15
 const val EQ_MAX_DB = 15
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EqualizerSheet(
   state: EqualizerState,
@@ -65,13 +62,8 @@ fun EqualizerSheet(
   onDismissRequest: () -> Unit,
   modifier: Modifier = Modifier,
 ) {
-  val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-  ModalBottomSheet(
+  PlayerSheet(
     onDismissRequest = onDismissRequest,
-    sheetState = sheetState,
-    containerColor = MaterialTheme.colorScheme.surfaceContainer,
-    dragHandle = null,
     modifier = modifier,
   ) {
     Column(
@@ -79,10 +71,15 @@ fun EqualizerSheet(
         Modifier
           .fillMaxWidth()
           .verticalScroll(rememberScrollState())
-          .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 48.dp),
+          .padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 48.dp),
     ) {
       Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+          Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .clickable { onEnabledChanged(!state.isEnabled) }
+            .padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
@@ -96,7 +93,6 @@ fun EqualizerSheet(
         IconSwitch(
           checked = state.isEnabled,
           onCheckedChange = onEnabledChanged,
-          modifier = Modifier.scale(0.8f),
         )
       }
 
@@ -119,12 +115,14 @@ fun EqualizerSheet(
             preset = preset,
             isSelected = preset == state.currentPreset,
             isEnabled = state.isEnabled,
-            onClick =
+            onClick = {
+              if (!state.isEnabled) {
+                onEnabledChanged(true)
+              }
               if (preset != EqualizerPreset.CUSTOM) {
-                { onPresetSelected(preset) }
-              } else {
-                null
-              },
+                onPresetSelected(preset)
+              }
+            },
           )
         }
       }
@@ -143,7 +141,12 @@ fun EqualizerSheet(
             label = EQ_BAND_LABELS.getOrElse(index) { "" },
             gainDb = gain,
             isEnabled = state.isEnabled,
-            onGainChanged = { db -> onBandChanged(index, db) },
+            onGainChanged = { db ->
+              if (!state.isEnabled) {
+                onEnabledChanged(true)
+              }
+              onBandChanged(index, db)
+            },
             modifier = Modifier.weight(1f),
           )
         }
@@ -155,7 +158,15 @@ fun EqualizerSheet(
       )
 
       Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier =
+          Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .clickable {
+              if (!state.isEnabled) {
+                onEnabledChanged(true)
+              }
+            },
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
       ) {
@@ -194,10 +205,13 @@ fun EqualizerSheet(
         value = volumeBoostValue,
         onValueChange = { newValue ->
           volumeBoostValue = newValue
+          if (!state.isEnabled) {
+            onEnabledChanged(true)
+          }
           onVolumeBoostChanged(newValue.roundToInt())
         },
         valueRange = 0f..10f,
-        enabled = state.isEnabled,
+        enabled = true,
         modifier = Modifier.fillMaxWidth(),
       )
 
@@ -241,7 +255,7 @@ private fun PresetChip(
     contentAlignment = Alignment.Center,
     modifier =
       Modifier
-        .alpha(if (isEnabled) 1f else 0.38f)
+        .alpha(if (isEnabled) 1f else 0.55f)
         .clip(RoundedCornerShape(50))
         .background(
           if (isSelected) {
@@ -259,7 +273,7 @@ private fun PresetChip(
             },
           ),
           RoundedCornerShape(50),
-        ).then(if (isEnabled && (onClick != null)) Modifier.clickable(onClick = onClick) else Modifier)
+        ).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
         .padding(horizontal = 16.dp, vertical = 8.dp),
   ) {
     Text(
@@ -298,7 +312,7 @@ private fun BandColumn(
         if (isEnabled) {
           MaterialTheme.colorScheme.primary
         } else {
-          MaterialTheme.colorScheme.onSurfaceVariant
+          MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
         },
       textAlign = TextAlign.Center,
     )
@@ -310,7 +324,7 @@ private fun BandColumn(
         onGainChanged(newValue.roundToInt())
       },
       valueRange = EQ_MIN_DB.toFloat()..EQ_MAX_DB.toFloat(),
-      enabled = isEnabled,
+      enabled = true,
       modifier =
         Modifier
           .weight(1f)
@@ -334,13 +348,19 @@ private fun BandColumn(
           }.graphicsLayer {
             rotationZ = -90f
             transformOrigin = TransformOrigin.Center
+            alpha = if (isEnabled) 1f else 0.45f
           },
     )
 
     Text(
       text = label,
       style = MaterialTheme.typography.labelSmall,
-      color = MaterialTheme.colorScheme.onSurfaceVariant,
+      color =
+        if (isEnabled) {
+          MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+          MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        },
       textAlign = TextAlign.Center,
     )
   }

@@ -33,6 +33,7 @@ class MPVView(
   private val advancedPreferences: AdvancedPreferences by inject()
   private val subtitlesPreferences: SubtitlesPreferences by inject()
   private val anime4kManager: Anime4KManager by inject()
+  private val audioEqualizerManager: xyz.mpv.rex.utils.media.AudioEqualizerManager by inject()
 
   var isExiting = false
 
@@ -343,9 +344,10 @@ class MPVView(
     MPVLib.setOptionString("audio-pitch-correction", audioPreferences.audioPitchCorrection.get().toString())
     MPVLib.setOptionString("volume-max", (audioPreferences.volumeBoostCap.get() + 100).toString())
     
-    // Volume normalization using dynamic audio normalization filter
-    if (audioPreferences.volumeNormalization.get()) {
-      MPVLib.setOptionString("af", "dynaudnorm")
+    // Setup audio filters (volume normalization, channel remap, equalizer)
+    val filterString = audioEqualizerManager.buildCurrentFilterString()
+    if (filterString.isNotBlank()) {
+      MPVLib.setOptionString("af", filterString)
     }
   }
 

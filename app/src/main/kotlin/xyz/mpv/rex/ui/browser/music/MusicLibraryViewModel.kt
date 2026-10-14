@@ -50,7 +50,6 @@ class MusicLibraryViewModel(
   KoinComponent {
   private val hybridMediaIndexRepository: HybridMediaIndexRepository by inject()
   private val browserPreferences: xyz.mpv.rex.preferences.BrowserPreferences by inject()
-  private val playbackStateRepository: xyz.mpv.rex.database.repository.PlaybackStateRepository by inject()
 
   /** All audio items, alias of the base class's [items] for readability at call sites. */
   val songs: StateFlow<List<Video>> = items

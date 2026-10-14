@@ -39,6 +39,7 @@ import xyz.mpv.rex.ui.browser.dialogs.SortDialog
 import xyz.mpv.rex.ui.browser.dialogs.ViewModeSelector
 import xyz.mpv.rex.ui.browser.selection.rememberSelectionManager
 import xyz.mpv.rex.ui.browser.selection.SelectionManager
+import xyz.mpv.rex.ui.browser.selection.EmbeddedSelectionState
 import xyz.mpv.rex.ui.browser.sheets.PlaylistActionSheet
 import xyz.mpv.rex.ui.browser.states.EmptyState
 import xyz.mpv.rex.ui.utils.LocalBackStack
@@ -56,13 +57,32 @@ object PlaylistScreen : Screen {
 
   @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
   @Composable
-  fun EmbeddedContent(searchQuery: String = "", layoutModeOverride: MediaLayoutMode? = null) {
-    InternalContent(isEmbedded = true, externalSearchQuery = searchQuery, layoutModeOverride = layoutModeOverride, showOnlyMusicPlaylists = true)
+  fun EmbeddedContent(
+    searchQuery: String = "",
+    layoutModeOverride: MediaLayoutMode? = null,
+    onSelectionModeChange: ((Boolean) -> Unit)? = null,
+    onEmbeddedSelectionStateChanged: ((EmbeddedSelectionState?) -> Unit)? = null,
+  ) {
+    InternalContent(
+      isEmbedded = true,
+      externalSearchQuery = searchQuery,
+      layoutModeOverride = layoutModeOverride,
+      showOnlyMusicPlaylists = true,
+      onSelectionModeChange = onSelectionModeChange,
+      onEmbeddedSelectionStateChanged = onEmbeddedSelectionStateChanged,
+    )
   }
 
   @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
   @Composable
-  private fun InternalContent(isEmbedded: Boolean, externalSearchQuery: String, layoutModeOverride: MediaLayoutMode? = null, showOnlyMusicPlaylists: Boolean = false) {
+  private fun InternalContent(
+    isEmbedded: Boolean,
+    externalSearchQuery: String,
+    layoutModeOverride: MediaLayoutMode? = null,
+    showOnlyMusicPlaylists: Boolean = false,
+    onSelectionModeChange: ((Boolean) -> Unit)? = null,
+    onEmbeddedSelectionStateChanged: ((EmbeddedSelectionState?) -> Unit)? = null,
+  ) {
     val context = LocalContext.current
     val repository = koinInject<PlaylistRepository>()
     val backStack = LocalBackStack.current
@@ -129,6 +149,10 @@ object PlaylistScreen : Screen {
       onOperationComplete = { viewModel.refresh() },
     )
 
+    LaunchedEffect(selectionManager.isInSelectionMode) {
+      onSelectionModeChange?.invoke(selectionManager.isInSelectionMode)
+    }
+
     // Use the remembered states
     val listState = rememberLazyListState()
     val gridState = rememberLazyGridState()
@@ -181,9 +205,41 @@ object PlaylistScreen : Screen {
       onExpandedChange = {},
     )
 
+    val currentEmbeddedSelectionState = remember(
+      selectionManager.isInSelectionMode,
+      selectionManager.selectedCount,
+      filteredPlaylists.size,
+      selectionManager.isSingleSelection,
+    ) {
+      EmbeddedSelectionState(
+        isInSelectionMode = selectionManager.isInSelectionMode,
+        selectedCount = selectionManager.selectedCount,
+        totalCount = filteredPlaylists.size,
+        isSingleSelection = selectionManager.isSingleSelection,
+        onCancel = { selectionManager.clear() },
+        onRename = if (selectionManager.isSingleSelection) {
+          { showRenameDialog = true }
+        } else null,
+        onDelete = { showDeleteDialog = true },
+        onSelectAll = { selectionManager.selectAll() },
+        onInvertSelection = { selectionManager.invertSelection() },
+        onDeselectAll = { selectionManager.clear() },
+      )
+    }
+
+    LaunchedEffect(currentEmbeddedSelectionState) {
+      onEmbeddedSelectionStateChanged?.invoke(currentEmbeddedSelectionState)
+    }
+
+    DisposableEffect(Unit) {
+      onDispose {
+        onEmbeddedSelectionStateChanged?.invoke(null)
+      }
+    }
+
     Scaffold(
         topBar = {
-          if (!isEmbedded || selectionManager.isInSelectionMode) {
+          if (!isEmbedded) {
             if (isSearching && !isEmbedded) {
               // Search mode - show search bar
               SearchBar(

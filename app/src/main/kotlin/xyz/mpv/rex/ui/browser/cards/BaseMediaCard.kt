@@ -30,19 +30,33 @@ import androidx.compose.ui.unit.dp
 @Composable
 fun MediaMetadataChip(
     text: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector? = null,
 ) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelSmall,
+    Row(
         modifier = modifier
             .background(
                 MaterialTheme.colorScheme.surfaceContainerHigh,
                 RoundedCornerShape(8.dp),
             )
             .padding(horizontal = 8.dp, vertical = 4.dp),
-        color = MaterialTheme.colorScheme.onSurface,
-    )
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (icon != null) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Text(
+            text = text,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+    }
 }
 
 /**

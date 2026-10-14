@@ -46,6 +46,7 @@ fun AudioTracksSheet(
   modifier: Modifier = Modifier,
 ) {
   val audioPreferences = koinInject<AudioPreferences>()
+  val audioEqualizerManager = koinInject<xyz.mpv.rex.utils.media.AudioEqualizerManager>()
   val audioChannels by audioPreferences.audioChannels.collectAsState()
 
   GenericTracksSheet(
@@ -93,9 +94,9 @@ fun AudioTracksSheet(
                 if (it == AudioChannels.ReverseStereo) {
                   MPVLib.setPropertyString(AudioChannels.AutoSafe.property, AudioChannels.AutoSafe.value)
                 } else {
-                  MPVLib.setPropertyString(AudioChannels.ReverseStereo.property, "")
+                  MPVLib.setPropertyString(it.property, it.value)
                 }
-                MPVLib.setPropertyString(it.property, it.value)
+                audioEqualizerManager.applyAudioFilters()
               },
               label = { Text(text = stringResource(id = it.title)) },
               leadingIcon = null,

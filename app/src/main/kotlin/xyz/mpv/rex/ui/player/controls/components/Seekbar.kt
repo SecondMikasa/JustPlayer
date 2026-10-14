@@ -33,6 +33,7 @@ import androidx.compose.material3.ripple
 import androidx.compose.material3.Slider
 import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -97,6 +98,7 @@ fun SeekbarWithTimers(
   loopEnd: Float? = null,
   isGestureSeeking: Boolean = false,
   isCancelActive: Boolean = false,
+  timerColor: Color? = null,
   modifier: Modifier = Modifier,
 ) {
   val clickEvent = LocalPlayerButtonsClickEvent.current
@@ -207,6 +209,7 @@ fun SeekbarWithTimers(
     VideoTimer(
       value = { if (isUserInteracting) userPosition else position() },
       timersInverted.first,
+      color = timerColor,
       onClick = {
         clickEvent()
         positionTimerOnClick()
@@ -348,6 +351,7 @@ fun SeekbarWithTimers(
     VideoTimer(
       value = { if (timersInverted.second) position() - duration else duration },
       isInverted = timersInverted.second,
+      color = timerColor,
       onClick = {
         clickEvent()
         durationTimerOnCLick()
@@ -756,6 +760,7 @@ fun VideoTimer(
   value: () -> Float,
   isInverted: Boolean,
   modifier: Modifier = Modifier,
+  color: Color? = null,
   onClick: () -> Unit = {},
 ) {
   val interactionSource = remember { MutableInteractionSource() }
@@ -763,6 +768,7 @@ fun VideoTimer(
   val matchTheme by appearancePreferences.matchPlayerControlsToTheme.collectAsState()
   
   val timeText = Utils.prettyTime(value().toInt(), isInverted)
+  val defaultColor = if (matchTheme) MaterialTheme.colorScheme.primary else LocalContentColor.current
   
   Text(
     modifier =
@@ -775,7 +781,7 @@ fun VideoTimer(
         )
         .wrapContentHeight(Alignment.CenterVertically),
     text = timeText,
-    color = if (matchTheme) MaterialTheme.colorScheme.primary else Color.White,
+    color = color ?: defaultColor,
     textAlign = TextAlign.Center,
   )
 }

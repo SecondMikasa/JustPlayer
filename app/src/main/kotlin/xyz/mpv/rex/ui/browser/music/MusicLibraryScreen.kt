@@ -56,6 +56,7 @@ import xyz.mpv.rex.ui.browser.dialogs.*
 import xyz.mpv.rex.ui.browser.playlist.PlaylistScreen
 import xyz.mpv.rex.ui.browser.selection.rememberSelectionManager
 import xyz.mpv.rex.ui.browser.selection.SelectionManager
+import xyz.mpv.rex.ui.browser.selection.EmbeddedSelectionState
 import xyz.mpv.rex.ui.utils.LocalBackStack
 import xyz.mpv.rex.utils.media.MediaUtils
 import xyz.mpv.rex.utils.media.CopyPasteOps
@@ -98,7 +99,6 @@ object MusicLibraryScreen : Screen {
     val showVideoThumbnails by browserPreferences.showVideoThumbnails.collectAsState()
     val unlimitedNameLines by appearancePreferences.unlimitedNameLines.collectAsState()
     val showSizeChip by browserPreferences.showSizeChip.collectAsState()
-    val showResolutionChip by browserPreferences.showResolutionChip.collectAsState()
     val showDateChip by browserPreferences.showDateChip.collectAsState()
     val showProgressBar by browserPreferences.showProgressBar.collectAsState()
     val showSubtitleIndicator by browserPreferences.showSubtitleIndicator.collectAsState()
@@ -117,6 +117,34 @@ object MusicLibraryScreen : Screen {
     val renameDialogOpen        = rememberSaveable { mutableStateOf(false) }
     val addToPlaylistDialogOpen = rememberSaveable { mutableStateOf(false) }
     var showSortAndLayoutDialog by rememberSaveable { mutableStateOf(false) }
+    var playlistSelectionState by remember { mutableStateOf<EmbeddedSelectionState?>(null) }
+
+    val musicTabs = remember { MusicTab.entries }
+    val pagerState = rememberPagerState(
+      initialPage = selectedTab.ordinal.coerceIn(0, maxOf(0, musicTabs.lastIndex)),
+      pageCount = { musicTabs.size }
+    )
+
+    LaunchedEffect(pagerState.settledPage) {
+      if (pagerState.settledPage in musicTabs.indices) {
+        viewModel.selectTab(musicTabs[pagerState.settledPage])
+      }
+    }
+
+    LaunchedEffect(selectedTab) {
+      if (selectedTab.ordinal in musicTabs.indices && selectedTab.ordinal != pagerState.settledPage) {
+        pagerState.animateScrollToPage(selectedTab.ordinal)
+      }
+    }
+
+    LaunchedEffect(pagerState.currentPage) {
+      if (musicTabs.getOrNull(pagerState.currentPage) != MusicTab.PLAYLISTS) {
+        playlistSelectionState?.onCancel?.invoke()
+      }
+      if (selectionManager.isInSelectionMode) {
+        selectionManager.clear()
+      }
+    }
 
     // ── Copy/Move state ────────────────────────────────────────────────────
     val folderPickerOpen = rememberSaveable { mutableStateOf(false) }
@@ -157,29 +185,17 @@ object MusicLibraryScreen : Screen {
 
     val isRefreshing = remember { mutableStateOf(false) }
 
-    val musicTabs = remember { MusicTab.entries }
-    val pagerState = rememberPagerState(
-      initialPage = selectedTab.ordinal.coerceIn(0, maxOf(0, musicTabs.lastIndex)),
-      pageCount = { musicTabs.size }
-    )
 
-    LaunchedEffect(pagerState.settledPage) {
-      if (pagerState.settledPage in musicTabs.indices) {
-        viewModel.selectTab(musicTabs[pagerState.settledPage])
-      }
-    }
-
-    LaunchedEffect(selectedTab) {
-      if (selectedTab.ordinal in musicTabs.indices && selectedTab.ordinal != pagerState.settledPage) {
-        pagerState.animateScrollToPage(selectedTab.ordinal)
-      }
-    }
 
     LaunchedEffect(searchQuery) { viewModel.setSearchQuery(searchQuery) }
 
+    val isPlaylistTab = musicTabs.getOrNull(pagerState.currentPage) == MusicTab.PLAYLISTS
+    val isPlaylistSelectionActive = isPlaylistTab && (playlistSelectionState?.isInSelectionMode == true)
+
     // Exit drill-in or selection with back
-    BackHandler(enabled = openAlbum != null || openArtist != null || openFolder != null || selectionManager.isInSelectionMode) {
+    BackHandler(enabled = openAlbum != null || openArtist != null || openFolder != null || selectionManager.isInSelectionMode || isPlaylistSelectionActive) {
       when {
+        isPlaylistSelectionActive -> playlistSelectionState?.onCancel?.invoke()
         selectionManager.isInSelectionMode -> selectionManager.clear()
         else -> { openAlbum = null; openArtist = null; openFolder = null }
       }
@@ -236,33 +252,66 @@ object MusicLibraryScreen : Screen {
               )
             }
           } else {
+            val isPlaylistSelection = isPlaylistSelectionActive
+            val isSongSelection = selectionManager.isInSelectionMode
+
             BrowserTopBar(
               title = topBarTitle,
-              isInSelectionMode = selectionManager.isInSelectionMode,
-              selectedCount = selectionManager.selectedCount,
-              totalCount = filteredSongs.size,
-              onCancelSelection = { selectionManager.clear() },
+              isInSelectionMode = isPlaylistSelection || isSongSelection,
+              selectedCount = if (isPlaylistSelection) (playlistSelectionState?.selectedCount ?: 0) else selectionManager.selectedCount,
+              totalCount = if (isPlaylistSelection) (playlistSelectionState?.totalCount ?: 0) else filteredSongs.size,
+              onCancelSelection = {
+                if (isPlaylistSelection) {
+                  playlistSelectionState?.onCancel?.invoke()
+                } else {
+                  selectionManager.clear()
+                }
+              },
               onBackClick = when {
-                selectionManager.isInSelectionMode -> null
+                isPlaylistSelection -> ({ playlistSelectionState?.onCancel?.invoke() })
+                isSongSelection -> ({ selectionManager.clear() })
                 openAlbum != null || openArtist != null || openFolder != null ->
                   ({ openAlbum = null; openArtist = null; openFolder = null })
                 else -> null
               },
-              onSearchClick = if (!selectionManager.isInSelectionMode && openAlbum == null && openArtist == null && openFolder == null) {
+              onSearchClick = if (!isPlaylistSelection && !isSongSelection && openAlbum == null && openArtist == null && openFolder == null) {
                 { isSearching = true }
               } else null,
-              onSortClick = if (!selectionManager.isInSelectionMode && openAlbum == null && openArtist == null && openFolder == null) {
+              onSortClick = if (!isPlaylistSelection && !isSongSelection && openAlbum == null && openArtist == null && openFolder == null) {
                 { showSortAndLayoutDialog = true }
               } else null,
-              onSettingsClick = if (!selectionManager.isInSelectionMode && openAlbum == null && openArtist == null && openFolder == null) {
+              onSettingsClick = if (!isPlaylistSelection && !isSongSelection && openAlbum == null && openArtist == null && openFolder == null) {
                 { backstack.add(xyz.mpv.rex.ui.preferences.PreferencesScreen) }
               } else null,
-              onSelectAll    = { selectionManager.selectAll() },
-              onInvertSelection = { selectionManager.invertSelection() },
-              onDeselectAll  = { selectionManager.clear() },
-              onPlayClick    = if (selectionManager.isInSelectionMode) {
+              onSelectAll = if (isPlaylistSelection) {
+                playlistSelectionState?.onSelectAll
+              } else {
+                { selectionManager.selectAll() }
+              },
+              onInvertSelection = if (isPlaylistSelection) {
+                playlistSelectionState?.onInvertSelection
+              } else {
+                { selectionManager.invertSelection() }
+              },
+              onDeselectAll = if (isPlaylistSelection) {
+                playlistSelectionState?.onDeselectAll
+              } else {
+                { selectionManager.clear() }
+              },
+              onPlayClick = if (isSongSelection) {
                 { selectionManager.playSelected() }
               } else null,
+              onRenameClick = if (isPlaylistSelection) {
+                playlistSelectionState?.onRename
+              } else null,
+              onDeleteClick = if (isPlaylistSelection) {
+                playlistSelectionState?.onDelete
+              } else null,
+              isSingleSelection = if (isPlaylistSelection) {
+                playlistSelectionState?.isSingleSelection == true
+              } else {
+                selectionManager.isSingleSelection
+              },
             )
           }
 
@@ -313,6 +362,7 @@ object MusicLibraryScreen : Screen {
                 selectionManager = null,
                 layoutMode = musicLayoutMode,
                 coverArtSize = musicCoverArtSize,
+                showSubtitleIndicator = showSubtitleIndicator,
                 onSongClick = { song -> playSongWithQueue(song, songs) },
                 songProgress = songProgress,
               )
@@ -325,6 +375,7 @@ object MusicLibraryScreen : Screen {
                 selectionManager = null,
                 layoutMode = musicLayoutMode,
                 coverArtSize = musicCoverArtSize,
+                showSubtitleIndicator = showSubtitleIndicator,
                 onSongClick = { song -> playSongWithQueue(song, songs) },
                 songProgress = songProgress,
               )
@@ -337,6 +388,7 @@ object MusicLibraryScreen : Screen {
                 selectionManager = null,
                 layoutMode = musicLayoutMode,
                 coverArtSize = musicCoverArtSize,
+                showSubtitleIndicator = showSubtitleIndicator,
                 onSongClick = { song -> playSongWithQueue(song, songs) },
                 songProgress = songProgress,
               )
@@ -357,13 +409,18 @@ object MusicLibraryScreen : Screen {
                     selectionManager = selectionManager,
                     layoutMode = musicLayoutMode,
                     coverArtSize = musicCoverArtSize,
+                    showSubtitleIndicator = showSubtitleIndicator,
                     onSongClick = { song -> playSongWithQueue(song, filteredSongs) },
                     songProgress = songProgress,
                   )
                   MusicTab.ALBUMS -> AlbumGrid(albums = albums, layoutMode = musicLayoutMode, coverArtSize = musicCoverArtSize, onAlbumClick = { openAlbum = it })
                   MusicTab.ARTISTS -> ArtistList(artists = artists, layoutMode = musicLayoutMode, coverArtSize = musicCoverArtSize, onArtistClick = { openArtist = it })
                   MusicTab.FOLDERS -> FolderList(folders = folders, layoutMode = musicLayoutMode, coverArtSize = musicCoverArtSize, onFolderClick = { openFolder = it })
-                  MusicTab.PLAYLISTS -> PlaylistScreen.EmbeddedContent(searchQuery = searchQuery, layoutModeOverride = musicLayoutMode)
+                  MusicTab.PLAYLISTS -> PlaylistScreen.EmbeddedContent(
+                    searchQuery = searchQuery,
+                    layoutModeOverride = musicLayoutMode,
+                    onEmbeddedSelectionStateChanged = { playlistSelectionState = it },
+                  )
                 }
               }
             }
@@ -458,11 +515,6 @@ object MusicLibraryScreen : Screen {
             onCheckedChange = { browserPreferences.showSizeChip.set(it) },
           ),
           VisibilityToggle(
-            label = "Format",
-            checked = showResolutionChip,
-            onCheckedChange = { browserPreferences.showResolutionChip.set(it) },
-          ),
-          VisibilityToggle(
             label = "Date",
             checked = showDateChip,
             onCheckedChange = { browserPreferences.showDateChip.set(it) },
@@ -523,6 +575,7 @@ private fun SongList(
   selectionManager: SelectionManager<Video, Long>?,
   layoutMode: MediaLayoutMode = MediaLayoutMode.LIST,
   coverArtSize: Int = 56,
+  showSubtitleIndicator: Boolean = true,
   onSongClick: (Video) -> Unit,
   songProgress: Map<Long, Float> = emptyMap(),
 ) {
@@ -555,6 +608,7 @@ private fun SongList(
           onLongClick = { selectionManager?.handleLongClick(song) },
           isSelected = isSelected,
           uiSettings = uiSettings,
+          showSubtitleIndicator = showSubtitleIndicator,
           isGridMode = true,
           gridColumns = 2,
           thumbnailSize = (coverArtSize * 2.2f).dp,
@@ -582,6 +636,7 @@ private fun SongList(
           onLongClick = { selectionManager?.handleLongClick(song) },
           isSelected = isSelected,
           uiSettings = uiSettings,
+          showSubtitleIndicator = showSubtitleIndicator,
           thumbnailSize = coverArtSize.dp,
           progressPercentage = songProgress[song.id],
           modifier = Modifier

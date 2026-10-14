@@ -111,3 +111,24 @@ data class SelectionState<ID>(
     getId: (T) -> ID,
   ): List<T> = items.filter { selectedIds.contains(getId(it)) }
 }
+
+/**
+ * State and actions for embedded selection mode (e.g. dual-pane video list, embedded music playlists)
+ */
+@Stable
+data class EmbeddedSelectionState(
+  val isInSelectionMode: Boolean = false,
+  val selectedCount: Int = 0,
+  val totalCount: Int = 0,
+  val isSingleSelection: Boolean = false,
+  val onCancel: () -> Unit = {},
+  val onPlay: (() -> Unit)? = null,
+  val onInfo: (() -> Unit)? = null,
+  val onRename: (() -> Unit)? = null,
+  val onDelete: (() -> Unit)? = null,
+  val onSelectAll: (() -> Unit)? = null,
+  val onInvertSelection: (() -> Unit)? = null,
+  val onDeselectAll: (() -> Unit)? = null,
+  val overflowActions: List<xyz.mpv.rex.ui.browser.components.SelectionOverflowAction> = emptyList(),
+)
+

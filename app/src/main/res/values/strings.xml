@@ -849,11 +849,16 @@
     <string name="add_to_playlist">Add to Playlist</string>
     <string name="adding_one_video_to_playlist">Adding 1 video to playlist</string>
     <string name="adding_n_videos_to_playlist">Adding %1$d videos to playlist</string>
+    <string name="adding_one_song_to_playlist">Adding 1 song to playlist</string>
+    <string name="adding_n_songs_to_playlist">Adding %1$d songs to playlist</string>
     <string name="create_new_playlist">Create New Playlist</string>
     <string name="existing_playlists">Existing Playlists</string>
     <string name="video_added_to">Video added to \"%1$s\"</string>
     <string name="n_videos_added_to">%1$d videos added to \"%2$s\"</string>
+    <string name="song_added_to">Song added to \"%1$s\"</string>
+    <string name="n_songs_added_to">%1$d songs added to \"%2$s\"</string>
     <string name="playlist_videos_count">%1$d videos • %2$s</string>
+    <string name="playlist_songs_count">%1$d songs • %2$s</string>
     <string name="create_first_playlist_above">Create your first playlist above</string>
 
     <!-- Copy Paste Dialog Strings -->
@@ -981,7 +986,9 @@
     <string name="btn_label_mirror">Horizontal Flip</string>
     <string name="btn_label_vertical_flip">Vertical Flip</string>
     <string name="btn_label_ab_loop">A-B Loop</string>
-    <string name="btn_label_custom_skip">Custom Skip</string>
+    <string name="btn_label_custom_skip">Custom Skip Forward</string>
+    <string name="btn_label_custom_skip_back">Custom Skip Back</string>
+    <string name="skip_back_seconds">Skip Back %1$ds</string>
     <string name="btn_label_background_playback">Background Playback</string>
     <string name="btn_label_ambient_mode">Ambience Mode</string>
     <string name="btn_label_sleep_timer">Sleep Timer</string>

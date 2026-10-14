@@ -494,9 +494,28 @@ fun ControlsTab(
           }
           visible.addAll(visibleInRow)
       } else {
-          visible.addAll(appearancePreferences.parseButtons(topRightControlsPref, mutableSetOf()))
-          visible.addAll(appearancePreferences.parseButtons(bottomRightControlsPref, mutableSetOf()))
-          visible.addAll(appearancePreferences.parseButtons(bottomLeftControlsPref, mutableSetOf()))
+          // In landscape, add buttons that are actually configured in each position,
+          // but apply functional filters (e.g. BOOKMARKS_CHAPTERS only if chapters exist)
+          val allLandscape = buildList {
+              addAll(appearancePreferences.parseButtons(topRightControlsPref, mutableSetOf()))
+              addAll(appearancePreferences.parseButtons(bottomRightControlsPref, mutableSetOf()))
+              addAll(appearancePreferences.parseButtons(bottomLeftControlsPref, mutableSetOf()))
+          }
+          val filteredLandscape = allLandscape.filter { button ->
+              when (button) {
+                  PlayerButton.BOOKMARKS_CHAPTERS -> chapters.isNotEmpty()
+                  PlayerButton.SHUFFLE -> hasPlaylistSupport
+                  PlayerButton.CURRENT_CHAPTER -> chapters.isNotEmpty()
+                  PlayerButton.NONE -> false
+                  else -> true
+              }
+          }
+          visible.addAll(filteredLandscape)
+      }
+      // If either chapter button is visible on screen, consider both as visible so chapters don't duplicate
+      if (visible.contains(PlayerButton.BOOKMARKS_CHAPTERS) || visible.contains(PlayerButton.CURRENT_CHAPTER)) {
+          visible.add(PlayerButton.BOOKMARKS_CHAPTERS)
+          visible.add(PlayerButton.CURRENT_CHAPTER)
       }
       // Always exclude these from the dynamic sheet calculations as they are static or special
       visible.add(PlayerButton.BACK_ARROW)
@@ -523,7 +542,7 @@ fun ControlsTab(
           when (button) {
               PlayerButton.SHUFFLE -> hasPlaylistSupport
               PlayerButton.BOOKMARKS_CHAPTERS -> chapters.isNotEmpty()
-              PlayerButton.CURRENT_CHAPTER -> chapters.isNotEmpty()
+              PlayerButton.CURRENT_CHAPTER -> false
               PlayerButton.AB_LOOP -> true // Always show in more sheet if missing from UI
               else -> true
           }

@@ -133,6 +133,8 @@ import java.io.File
 import kotlin.math.roundToInt
 
 
+import xyz.mpv.rex.ui.browser.selection.EmbeddedSelectionState
+
 @Serializable
 data class VideoListScreen(
   private val bucketId: String,
@@ -142,6 +144,23 @@ data class VideoListScreen(
   @OptIn(ExperimentalMaterial3ExpressiveApi::class)
   @Composable
   override fun Content() {
+    InternalContent(isEmbedded = isEmbedded, onEmbeddedSelectionStateChanged = null)
+  }
+
+  @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+  @Composable
+  fun EmbeddedContent(
+    onEmbeddedSelectionStateChanged: ((EmbeddedSelectionState?) -> Unit)? = null
+  ) {
+    InternalContent(isEmbedded = true, onEmbeddedSelectionStateChanged = onEmbeddedSelectionStateChanged)
+  }
+
+  @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+  @Composable
+  private fun InternalContent(
+    isEmbedded: Boolean,
+    onEmbeddedSelectionStateChanged: ((EmbeddedSelectionState?) -> Unit)?
+  ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val backstack = LocalBackStack.current
@@ -364,20 +383,90 @@ data class VideoListScreen(
       }
     }
 
+    val currentEmbeddedSelectionState = remember(
+      selectionManager.isInSelectionMode,
+      selectionManager.selectedCount,
+      sortedVideosWithInfo.size,
+      selectionManager.isSingleSelection,
+      sortedVideosWithInfo,
+    ) {
+      EmbeddedSelectionState(
+        isInSelectionMode = selectionManager.isInSelectionMode,
+        selectedCount = selectionManager.selectedCount,
+        totalCount = sortedVideosWithInfo.size,
+        isSingleSelection = selectionManager.isSingleSelection,
+        onCancel = { selectionManager.clear() },
+        onPlay = { selectionManager.playSelected() },
+        onInfo = {
+          val selected = selectionManager.getSelectedItems()
+          if (selectionManager.isSingleSelection) {
+            mediaInfoUri = selected.firstOrNull()?.uri
+          } else {
+            multiSelectionInfo = Triple(
+              selected.size,
+              selected.sumOf { it.size },
+              selected.sumOf { it.duration },
+            )
+          }
+        },
+        onSelectAll = { selectionManager.selectAll() },
+        onInvertSelection = { selectionManager.invertSelection() },
+        onDeselectAll = { selectionManager.clear() },
+        overflowActions = buildList {
+          add(
+            SelectionOverflowAction(
+              icon = Icons.Filled.PictureInPictureAlt,
+              label = context.getString(R.string.open_with_mini_player),
+              onClick = { selectionManager.playSelectedInMiniPlayer() },
+            )
+          )
+          add(
+            SelectionOverflowAction(
+              icon = Icons.Filled.Share,
+              label = context.getString(R.string.generic_share),
+              onClick = { selectionManager.shareSelected() },
+            )
+          )
+          val selectedVideos = selectionManager.getSelectedItems()
+          if (selectedVideos.isNotEmpty()) {
+            add(
+              SelectionOverflowAction(
+                icon = Icons.Filled.ContentCopy,
+                label = context.getString(R.string.copy_video_path),
+                onClick = {
+                  val paths = selectedVideos.joinToString("\n") { it.path }
+                  clipboardManager.setText(AnnotatedString(paths))
+                  Toast.makeText(context, R.string.copied_to_clipboard, Toast.LENGTH_SHORT).show()
+                }
+              )
+            )
+          }
+        }
+      )
+    }
+
+    LaunchedEffect(currentEmbeddedSelectionState) {
+      onEmbeddedSelectionStateChanged?.invoke(currentEmbeddedSelectionState)
+    }
+
+    DisposableEffect(Unit) {
+      onDispose {
+        onEmbeddedSelectionStateChanged?.invoke(null)
+      }
+    }
+
     Scaffold(
       topBar = {
-        if (!isEmbedded || selectionManager.isInSelectionMode) {
+        if (!isEmbedded) {
           BrowserTopBar(
             title = displayFolderName,
             isInSelectionMode = selectionManager.isInSelectionMode,
             selectedCount = selectionManager.selectedCount,
             totalCount = sortedVideosWithInfo.size,
-            onBackClick = {
-              if (selectionManager.isInSelectionMode) {
-                selectionManager.clear()
-              } else {
-                backstack.removeLastOrNull()
-              }
+            onBackClick = if (selectionManager.isInSelectionMode) {
+              { selectionManager.clear() }
+            } else {
+              { backstack.removeLastOrNull() }
             },
             onCancelSelection = { selectionManager.clear() },
             onSortClick = { sortDialogOpen.value = true },
@@ -428,7 +517,6 @@ data class VideoListScreen(
                 )
               }
             },
-
             onSelectAll = { selectionManager.selectAll() },
             onInvertSelection = { selectionManager.invertSelection() },
             onDeselectAll = { selectionManager.clear() },

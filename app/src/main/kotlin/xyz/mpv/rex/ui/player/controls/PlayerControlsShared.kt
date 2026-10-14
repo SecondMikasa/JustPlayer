@@ -895,6 +895,61 @@ fun RenderPlayerButton(
       }
     }
 
+    PlayerButton.CUSTOM_SKIP_BACK -> {
+      val playerPreferences = org.koin.compose.koinInject<xyz.mpv.rex.preferences.PlayerPreferences>()
+      val customSkipDuration by playerPreferences.customSkipDuration.collectAsState()
+      if (isMoreSheet) {
+          @OptIn(ExperimentalFoundationApi::class)
+          Surface(
+            shape = CircleShape,
+            color = surfaceColor,
+            contentColor = contentColor,
+            border = borderColor,
+            modifier = Modifier
+              .height(buttonSize)
+              .clip(CircleShape)
+              .combinedClickable(
+                onClick = {
+                  clickEvent()
+                  viewModel.seekBy(-customSkipDuration)
+                },
+                onLongClick = {
+                  clickEvent()
+                  onOpenSheet(Sheets.CustomSkipDuration)
+                }
+              )
+          ) {
+            Row(
+              verticalAlignment = Alignment.CenterVertically,
+              horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+              modifier = Modifier.padding(horizontal = MaterialTheme.spacing.smaller)
+            ) {
+              Icon(
+                imageVector = Icons.Default.FastRewind,
+                contentDescription = null,
+                modifier = Modifier.size(24.dp)
+              )
+              Text(
+                text = stringResource(R.string.skip_back_seconds, customSkipDuration),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+              )
+            }
+          }
+      } else {
+          ControlsButton(
+            icon = Icons.Default.FastRewind,
+            onClick = { viewModel.seekBy(-customSkipDuration) },
+            onLongClick = {
+              clickEvent()
+              onOpenSheet(Sheets.CustomSkipDuration)
+            },
+            modifier = Modifier.size(buttonSize),
+          )
+      }
+    }
+
+
     PlayerButton.SHUFFLE -> {
       // Only show shuffle button if there's a playlist (more than one video)
       if (viewModel.hasPlaylistSupport()) {

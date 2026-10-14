@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlayArrow
@@ -87,6 +88,8 @@ fun VideoCard(
   val thumbWidthDp = thumbnailSize ?: if (isGridMode) {
     if (gridColumns == 1) configuration.screenWidthDp.dp else 180.dp
   } else 128.dp
+  val isSmallThumb = !isGridMode && (thumbWidthDp < 64.dp)
+  val showDurationInOverlay = !isSmallThumb
   val aspect = 16f / 9f
   val thumbWidthPx = with(LocalDensity.current) { thumbWidthDp.roundToPx() }
   val thumbHeightPx = (thumbWidthPx / aspect).roundToInt()
@@ -162,20 +165,22 @@ fun VideoCard(
           )
         }
       }
-      // Duration overlay
-      Box(
-        modifier = Modifier
-          .align(Alignment.BottomEnd)
-          .padding(6.dp)
-          .clip(RoundedCornerShape(4.dp))
-          .background(Color.Black.copy(alpha = 0.65f))
-          .padding(horizontal = 6.dp, vertical = 2.dp),
-      ) {
-        Text(
-          text = video.durationFormatted,
-          style = MaterialTheme.typography.labelSmall,
-          color = Color.White,
-        )
+      // Duration overlay (only inside thumbnail if thumbnail is large enough)
+      if (showDurationInOverlay && video.durationFormatted.isNotBlank() && video.durationFormatted != "00:00") {
+        Box(
+          modifier = Modifier
+            .align(Alignment.BottomEnd)
+            .padding(6.dp)
+            .clip(RoundedCornerShape(4.dp))
+            .background(Color.Black.copy(alpha = 0.65f))
+            .padding(horizontal = 6.dp, vertical = 2.dp),
+        ) {
+          Text(
+            text = video.durationFormatted,
+            style = MaterialTheme.typography.labelSmall,
+            color = Color.White,
+          )
+        }
       }
     },
     infoContent = {
@@ -196,6 +201,13 @@ fun VideoCard(
       }
     },
     chipsContent = {
+      // Show duration as a chip if thumbnail is too small for overlay
+      if (!showDurationInOverlay && video.durationFormatted.isNotBlank() && video.durationFormatted != "00:00") {
+        MediaMetadataChip(
+          text = video.durationFormatted,
+          icon = Icons.Filled.AccessTime,
+        )
+      }
       // Codec Indicator: Show audio codec for audio files, subtitle codec for video files
       if (showSubtitleIndicator) {
         if (video.isAudio && video.mimeType.isNotBlank()) {
@@ -246,30 +258,9 @@ fun VideoCard(
       if (uiSettings.showSizeChip && video.sizeFormatted != "0 B" && video.sizeFormatted != "--") {
         MediaMetadataChip(text = video.sizeFormatted)
       }
-      // Format: Show audio format for audio files, resolution for video files
-      if (uiSettings.showResolutionChip) {
-        if (video.isAudio && video.mimeType.isNotBlank()) {
-          // For audio files, show the format from mimeType
-          val audioFormat = when {
-            video.mimeType.contains("mpeg", ignoreCase = true) || 
-            video.mimeType.contains("mp3", ignoreCase = true) -> "MP3"
-            video.mimeType.contains("flac", ignoreCase = true) -> "FLAC"
-            video.mimeType.contains("ogg", ignoreCase = true) -> "OGG"
-            video.mimeType.contains("opus", ignoreCase = true) -> "OPUS"
-            video.mimeType.contains("aac", ignoreCase = true) -> "AAC"
-            video.mimeType.contains("m4a", ignoreCase = true) -> "M4A"
-            video.mimeType.contains("wav", ignoreCase = true) -> "WAV"
-            video.mimeType.contains("wma", ignoreCase = true) -> "WMA"
-            video.mimeType.contains("alac", ignoreCase = true) -> "ALAC"
-            video.mimeType.contains("ape", ignoreCase = true) -> "APE"
-            video.mimeType.contains("webm", ignoreCase = true) -> "WEBM"
-            video.mimeType.contains("amr", ignoreCase = true) -> "AMR"
-            else -> video.mimeType.substringAfterLast("/", "").uppercase().take(8)
-          }
-          if (audioFormat.isNotBlank()) {
-            MediaMetadataChip(text = audioFormat)
-          }
-        } else if (video.resolution != "--") {
+      // Format: Show resolution for video files (audio codec is handled by showSubtitleIndicator)
+      if (uiSettings.showResolutionChip && !video.isAudio) {
+        if (video.resolution != "--") {
           // For video files, show resolution
           val displayRes = if (uiSettings.showFramerateInResolution) video.resolution else video.resolution.substringBefore("@")
           MediaMetadataChip(text = displayRes)

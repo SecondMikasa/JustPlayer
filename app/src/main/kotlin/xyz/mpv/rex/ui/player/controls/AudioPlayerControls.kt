@@ -57,6 +57,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.QueueMusic
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.FastForward
 import androidx.compose.material.icons.filled.FastRewind
@@ -80,11 +81,13 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -101,6 +104,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -142,6 +146,8 @@ import xyz.mpv.rex.ui.player.Sheets
 import xyz.mpv.rex.ui.player.controls.components.SeekbarWithTimers
 import xyz.mpv.rex.ui.player.controls.components.sheets.PlaylistItem
 import xyz.mpv.rex.ui.player.controls.components.sheets.toFixed
+import xyz.mpv.rex.domain.media.model.Video
+import xyz.mpv.rex.ui.browser.dialogs.AddToPlaylistDialog
 import xyz.mpv.rex.ui.theme.spacing
 import java.util.Locale
 import kotlin.math.PI
@@ -245,11 +251,15 @@ fun AudioPlayerControls(
   val onOpenPanel: (Panels) -> Unit = { viewModel.panelShown.value = it }
 
   var showAudioProperties by remember { mutableStateOf(false) }
+  var showAddToPlaylistDialog by remember { mutableStateOf(false) }
 
   // Show the system status bar and navigation bar while the audio player is visible,
   // and restore the video-player fullscreen state when it is disposed.
   val view = LocalView.current
-  DisposableEffect(view, activity) {
+  val backgroundColor = MaterialTheme.colorScheme.background
+  val isLight = backgroundColor.luminance() > 0.5f
+
+  DisposableEffect(view, activity, isLight) {
     val window = activity.window
     if (window != null) {
       // Drop FLAG_LAYOUT_NO_LIMITS so the system can push insets into our layout when the
@@ -262,6 +272,8 @@ fun AudioPlayerControls(
       // BEHAVIOR_DEFAULT: status bar responds normally to swipe gestures and the
       // notification shade expands on pull, reflowing the layout via statusBarsPadding().
       controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_DEFAULT
+      controller.isAppearanceLightStatusBars = isLight
+      controller.isAppearanceLightNavigationBars = isLight
     }
     onDispose {
       // Restore fullscreen / hide bars when switching back to video player
@@ -275,6 +287,8 @@ fun AudioPlayerControls(
         controller.hide(WindowInsetsCompat.Type.systemBars())
         controller.systemBarsBehavior =
           WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        controller.isAppearanceLightStatusBars = false
+        controller.isAppearanceLightNavigationBars = false
       }
     }
   }
@@ -290,11 +304,12 @@ fun AudioPlayerControls(
 
   // ── Root ─────────────────────────────────────────────────────────────────
   val currentArtwork = artwork
-  Box(
-    modifier = modifier
-      .fillMaxSize()
-      .background(MaterialTheme.colorScheme.background),
-  ) {
+  CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground) {
+    Box(
+      modifier = modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.background),
+    ) {
 
     // Blurred album-art backdrop (only when artwork exists)
     if (currentArtwork != null && !currentArtwork.isRecycled) {
@@ -406,7 +421,7 @@ fun AudioPlayerControls(
             }
           }
 
-          // Info row: Track N/M · ⏱1.00x · A·B  |  Queue
+          // Info row: Track N/M · ⏱1.00x · A·B  |  Add to playlist
           Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
@@ -416,12 +431,32 @@ fun AudioPlayerControls(
               verticalAlignment = Alignment.CenterVertically,
               horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-              if (playlistInfo != null) {
-                Text(
-                  text = "Track $playlistInfo",
-                  style = MaterialTheme.typography.bodySmall,
-                  color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
-                )
+              if (hasPlaylist || playlistInfo != null) {
+                Surface(
+                  shape = CircleShape,
+                  color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                  modifier = Modifier
+                    .clip(CircleShape)
+                    .clickable { onOpenSheet(Sheets.Playlist) },
+                ) {
+                  Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                  ) {
+                    Icon(
+                      imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                      contentDescription = "Open queue",
+                      tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                      modifier = Modifier.size(13.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                      text = if (playlistInfo != null) "Track $playlistInfo" else "Queue",
+                      style = MaterialTheme.typography.bodySmall,
+                      color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                    )
+                  }
+                }
                 InfoRowDot()
               }
               // Speed chip
@@ -478,17 +513,15 @@ fun AudioPlayerControls(
                 )
               }
             }
-            if (hasPlaylist) {
-              IconButton(
-                onClick = { onOpenSheet(Sheets.Playlist) },
-                modifier = Modifier.size(32.dp),
-              ) {
-                Icon(
-                  imageVector = Icons.AutoMirrored.Filled.QueueMusic,
-                  contentDescription = "Open queue",
-                  tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-                )
-              }
+            IconButton(
+              onClick = { showAddToPlaylistDialog = true },
+              modifier = Modifier.size(32.dp),
+            ) {
+              Icon(
+                imageVector = Icons.AutoMirrored.Outlined.PlaylistAdd,
+                contentDescription = "Add to playlist",
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+              )
             }
           }
 
@@ -504,6 +537,7 @@ fun AudioPlayerControls(
             chapters            = persistentListOf(),
             paused              = paused == true,
             seekbarStyle        = seekbarStyle,
+            timerColor          = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
           )
 
           // Transport: |◄  ◄◄  ▶  ▶▶  ►|
@@ -724,7 +758,7 @@ fun AudioPlayerControls(
 
         Spacer(modifier = Modifier.height(spacing.small))
 
-        // ── Info row: Track N/M · ⏱1.00x · A·B ─────────────────────────────
+        // ── Info row: Track N/M · ⏱1.00x · A·B  |  Add to playlist ─────────────────────────────
         Row(
           modifier = Modifier.fillMaxWidth(),
           verticalAlignment = Alignment.CenterVertically,
@@ -734,12 +768,32 @@ fun AudioPlayerControls(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp),
           ) {
-            if (playlistInfo != null) {
-              Text(
-                text = "Track $playlistInfo",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
-              )
+            if (hasPlaylist || playlistInfo != null) {
+              Surface(
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier
+                  .clip(CircleShape)
+                  .clickable { onOpenSheet(Sheets.Playlist) },
+              ) {
+                Row(
+                  verticalAlignment = Alignment.CenterVertically,
+                  modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                ) {
+                  Icon(
+                    imageVector = Icons.AutoMirrored.Filled.QueueMusic,
+                    contentDescription = "Open queue",
+                    tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                    modifier = Modifier.size(13.dp),
+                  )
+                  Spacer(modifier = Modifier.width(4.dp))
+                  Text(
+                    text = if (playlistInfo != null) "Track $playlistInfo" else "Queue",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
+                  )
+                }
+              }
               InfoRowDot()
             }
             // Speed chip — tap cycles, long-press opens full speed sheet
@@ -796,18 +850,15 @@ fun AudioPlayerControls(
               )
             }
           }
-          // Right side: Open current play queue  (same PlaylistSheet as video player)
-          if (hasPlaylist) {
-            IconButton(
-              onClick = { onOpenSheet(Sheets.Playlist) },
-              modifier = Modifier.size(36.dp),
-            ) {
-              Icon(
-                imageVector = Icons.AutoMirrored.Filled.QueueMusic,
-                contentDescription = "Open queue",
-                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
-              )
-            }
+          IconButton(
+            onClick = { showAddToPlaylistDialog = true },
+            modifier = Modifier.size(36.dp),
+          ) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Outlined.PlaylistAdd,
+              contentDescription = "Add to playlist",
+              tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+            )
           }
         }
 
@@ -825,6 +876,7 @@ fun AudioPlayerControls(
           chapters            = persistentListOf(),
           paused              = paused == true,
           seekbarStyle        = seekbarStyle,
+          timerColor          = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.75f),
         )
 
         Spacer(modifier = Modifier.height(spacing.small))
@@ -1164,6 +1216,45 @@ fun AudioPlayerControls(
   if (showAudioProperties) {
     AudioPropertiesSheet(path = currentPath, onDismiss = { showAudioProperties = false })
   }
+
+  // Add to Playlist dialog
+  if (showAddToPlaylistDialog) {
+    val resolvedPath = currentPath ?: ""
+    val currentVideo = remember(resolvedPath, mediaTitle, activeArtist, duration) {
+      val path = resolvedPath
+      val uri = if (path.isNotBlank()) path.toUri() else android.net.Uri.EMPTY
+      Video(
+        id = 0L,
+        title = mediaTitle,
+        displayName = mediaTitle,
+        path = path,
+        uri = uri,
+        duration = (duration ?: 0).toLong() * 1000L,
+        durationFormatted = "",
+        size = 0L,
+        sizeFormatted = "",
+        dateModified = 0L,
+        dateAdded = 0L,
+        mimeType = "audio/*",
+        bucketId = "",
+        bucketDisplayName = "",
+        width = 0,
+        height = 0,
+        fps = 0f,
+        resolution = "",
+        isAudio = true,
+        artist = activeArtist ?: "",
+      )
+    }
+    AddToPlaylistDialog(
+      isOpen = true,
+      videos = listOf(currentVideo),
+      onDismiss = { showAddToPlaylistDialog = false },
+      onSuccess = { showAddToPlaylistDialog = false },
+      isMusicContext = true,
+    )
+  }
+}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

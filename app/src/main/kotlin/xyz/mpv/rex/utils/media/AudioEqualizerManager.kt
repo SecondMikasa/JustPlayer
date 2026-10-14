@@ -1,32 +1,33 @@
 package xyz.mpv.rex.utils.media
 
-import android.media.audiofx.Equalizer
-import android.media.audiofx.LoudnessEnhancer
 import android.util.Log
+import `is`.xyz.mpv.MPVLib
+import xyz.mpv.rex.preferences.AudioChannels
+import xyz.mpv.rex.preferences.AudioPreferences
 
-class AudioEqualizerManager {
-  private var equalizer: Equalizer? = null
-  private var loudnessEnhancer: LoudnessEnhancer? = null
-  private var isInitialized = false
+class AudioEqualizerManager(
+  private val audioPreferences: AudioPreferences,
+) {
+  companion object {
+    private const val TAG = "AudioEqualizerManager"
+    val FREQUENCIES = listOf(60, 230, 910, 3600, 14000)
+  }
+
+  private var isEnabled = false
+  private var bandGains = listOf(0, 0, 0, 0, 0)
+  private var volumeBoostDb = 0
+
+  init {
+    isEnabled = audioPreferences.equalizerEnabled.get()
+    val gainsStr = audioPreferences.equalizerGains.get()
+    bandGains = gainsStr.split(",")
+      .mapNotNull { it.toIntOrNull() }
+      .takeIf { it.size == 5 } ?: listOf(0, 0, 0, 0, 0)
+    volumeBoostDb = audioPreferences.equalizerVolumeBoost.get()
+  }
 
   fun initSession(sessionId: Int = 0) {
-    release()
-    try {
-      val eq = Equalizer(0, sessionId)
-      equalizer = eq
-      isInitialized = true
-      Log.d("AudioEqualizerManager", "Hardware Equalizer attached to audio session $sessionId")
-    } catch (e: Exception) {
-      Log.e("AudioEqualizerManager", "Failed to attach hardware Equalizer: ${e.message}")
-    }
-
-    try {
-      val enhancer = LoudnessEnhancer(sessionId)
-      loudnessEnhancer = enhancer
-      Log.d("AudioEqualizerManager", "Hardware LoudnessEnhancer attached to audio session $sessionId")
-    } catch (e: Exception) {
-      Log.e("AudioEqualizerManager", "Failed to attach LoudnessEnhancer: ${e.message}")
-    }
+    applyAudioFilters()
   }
 
   fun updateState(
@@ -34,48 +35,63 @@ class AudioEqualizerManager {
     bandGains: List<Int>,
     volumeBoostDb: Int,
   ) {
-    if (!isInitialized) {
-      initSession(0)
+    this.isEnabled = enabled
+    this.bandGains = bandGains
+    this.volumeBoostDb = volumeBoostDb
+    applyAudioFilters()
+  }
+
+  fun buildCurrentFilterString(): String {
+    val filters = mutableListOf<String>()
+
+    val volumeNorm = runCatching { audioPreferences.volumeNormalization.get() }.getOrDefault(false)
+    if (volumeNorm) {
+      filters.add("dynaudnorm")
     }
 
-    try {
-      equalizer?.let { eq ->
-        eq.enabled = enabled
-        if (enabled) {
-          val numBands = eq.numberOfBands.toInt()
-          bandGains.forEachIndexed { index, db ->
-            if (index < numBands) {
-              val minMB = eq.bandLevelRange[0]
-              val maxMB = eq.bandLevelRange[1]
-              val targetMB = (db * 100).coerceIn(minMB.toInt(), maxMB.toInt()).toShort()
-              eq.setBandLevel(index.toShort(), targetMB)
-            }
-          }
-        }
-      }
-    } catch (e: Exception) {
-      Log.e("AudioEqualizerManager", "Failed to set equalizer levels: ${e.message}")
+    val channels = runCatching { audioPreferences.audioChannels.get() }.getOrDefault(AudioChannels.AutoSafe)
+    if (channels == AudioChannels.ReverseStereo) {
+      filters.add("pan=[stereo|c0=c1|c1=c0]")
     }
 
-    try {
-      loudnessEnhancer?.let { enhancer ->
-        if (enabled && (volumeBoostDb > 0)) {
-          enhancer.setTargetGain(volumeBoostDb * 100)
-          enhancer.enabled = true
-        } else {
-          enhancer.enabled = false
+    if (isEnabled) {
+      val lavfiChain = mutableListOf<String>()
+
+      FREQUENCIES.forEachIndexed { index, freq ->
+        val gain = bandGains.getOrElse(index) { 0 }
+        if (gain != 0) {
+          lavfiChain.add("equalizer=f=$freq:width_type=o:w=1:g=$gain")
         }
       }
+
+      if (volumeBoostDb > 0) {
+        lavfiChain.add("volume=volume=${volumeBoostDb}dB")
+      }
+
+      if (lavfiChain.isNotEmpty()) {
+        filters.add("lavfi=[${lavfiChain.joinToString(",")}]")
+      }
+    }
+
+    return filters.joinToString(",")
+  }
+
+  fun applyAudioFilters() {
+    val filterString = buildCurrentFilterString()
+    try {
+      MPVLib.setPropertyString("af", filterString)
+      if (filterString.isNotBlank()) {
+        runCatching { MPVLib.command("af", "set", filterString) }
+      } else {
+        runCatching { MPVLib.command("af", "clr", "") }
+      }
+      Log.d(TAG, "Applied audio filters to MPV: '$filterString'")
     } catch (e: Exception) {
-      Log.e("AudioEqualizerManager", "Failed to set LoudnessEnhancer gain: ${e.message}")
+      Log.e(TAG, "Failed to apply audio filters: ${e.message}")
     }
   }
 
   fun release() {
-    runCatching { equalizer?.release() }
-    runCatching { loudnessEnhancer?.release() }
-    equalizer = null
-    loudnessEnhancer = null
-    isInitialized = false
+    // Keep filter state or clear if needed
   }
 }

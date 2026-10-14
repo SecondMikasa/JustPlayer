@@ -7,7 +7,8 @@ import android.content.res.Configuration.ORIENTATION_LANDSCAPE
 import android.content.res.Configuration.ORIENTATION_PORTRAIT
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.rememberSplineBasedDecay
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -65,7 +66,13 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
-private val sheetAnimationSpec = tween<Float>(350)
+import androidx.compose.animation.core.tween
+
+private val sheetAnimationSpec = spring<Float>(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMedium,
+)
+private val fadeAnimationSpec = tween<Float>(250)
 
 @SuppressLint("ConfigurationScreenWidthHeight")
 @Composable
@@ -98,7 +105,7 @@ fun PlayerSheet(
   var backgroundAlpha by remember { mutableFloatStateOf(0f) }
   val alpha by animateFloatAsState(
     backgroundAlpha,
-    animationSpec = sheetAnimationSpec,
+    animationSpec = fadeAnimationSpec,
     label = "alpha",
   )
 
@@ -202,7 +209,14 @@ fun PlayerSheet(
     }
 
     LaunchedEffect(anchoredDraggableState) {
-      scope.launch { anchoredDraggableState.animateTo(0) }
+      snapshotFlow { anchoredDraggableState.anchors.size }
+        .filter { it > 0 }
+        .collectLatest {
+          anchoredDraggableState.animateTo(0)
+        }
+    }
+
+    LaunchedEffect(anchoredDraggableState) {
       snapshotFlow { anchoredDraggableState.currentValue }
         .drop(1)
         .filter { it == 1 }

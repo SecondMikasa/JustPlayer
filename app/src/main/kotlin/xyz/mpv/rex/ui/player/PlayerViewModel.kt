@@ -313,7 +313,8 @@ class PlayerViewModel(
   }
 
   fun updateEqualizerPreset(preset: EqualizerPreset) {
-    _equalizerState.update { it.copy(currentPreset = preset, bandGains = preset.gains) }
+    _equalizerState.update { it.copy(isEnabled = true, currentPreset = preset, bandGains = preset.gains) }
+    audioPreferences.equalizerEnabled.set(true)
     audioPreferences.equalizerPreset.set(preset.name)
     audioPreferences.equalizerGains.set(preset.gains.joinToString(","))
   }
@@ -324,16 +325,22 @@ class PlayerViewModel(
       if (index in newGains.indices) {
         newGains[index] = gainDb
       }
-      it.copy(bandGains = newGains, currentPreset = EqualizerPreset.CUSTOM)
+      it.copy(isEnabled = true, bandGains = newGains, currentPreset = EqualizerPreset.CUSTOM)
     }
+    audioPreferences.equalizerEnabled.set(true)
     val state = _equalizerState.value
     audioPreferences.equalizerGains.set(state.bandGains.joinToString(","))
     audioPreferences.equalizerPreset.set(EqualizerPreset.CUSTOM.name)
   }
 
   fun updateEqualizerVolumeBoost(boostDb: Int) {
-    _equalizerState.update { it.copy(volumeBoostDb = boostDb) }
+    _equalizerState.update { it.copy(isEnabled = true, volumeBoostDb = boostDb) }
+    audioPreferences.equalizerEnabled.set(true)
     audioPreferences.equalizerVolumeBoost.set(boostDb)
+  }
+
+  fun applyAudioFilters() {
+    audioEqualizerManager.applyAudioFilters()
   }
 
   private val _isFrameNavigationExpanded = MutableStateFlow(false)
@@ -493,6 +500,16 @@ class PlayerViewModel(
     viewModelScope.launch {
       equalizerState.collect { state ->
         audioEqualizerManager.updateState(state.isEnabled, state.bandGains, state.volumeBoostDb)
+      }
+    }
+    viewModelScope.launch {
+      audioPreferences.volumeNormalization.changes().collect {
+        audioEqualizerManager.applyAudioFilters()
+      }
+    }
+    viewModelScope.launch {
+      audioPreferences.audioChannels.changes().collect {
+        audioEqualizerManager.applyAudioFilters()
       }
     }
 
