@@ -62,6 +62,8 @@ import xyz.mpv.rex.preferences.SortOrder
 import xyz.mpv.rex.database.repository.VideoMetadataCacheRepository
 import xyz.mpv.rex.ui.player.controls.AudioPlayerControls
 import xyz.mpv.rex.ui.player.controls.PlayerControls
+import xyz.mpv.rex.ui.player.Sheets
+import xyz.mpv.rex.ui.player.Panels
 import xyz.mpv.rex.ui.theme.MpvexPlayerTheme
 import xyz.mpv.rex.utils.history.RecentlyPlayedOps
 import xyz.mpv.rex.utils.media.HttpUtils
@@ -669,17 +671,20 @@ class PlayerActivity :
           )
         }
 
-        // Resume-playback overlay – sits below the play/pause row, auto-dismisses after the
-        // user-configured duration. Matches the player's glass/flat surface theme via PlayerUpdate.
+        // Resume-playback overlay – left-aligned below the play/pause row for easy thumb access.
+        // Hidden whenever any sheet or panel is open so it never renders on top of them.
         val resumeDialogState by viewModel.resumeDialogState.collectAsState()
+        val sheetShown by viewModel.sheetShown.collectAsState()
+        val panelShown by viewModel.panelShown.collectAsState()
         val currentResumeState = resumeDialogState
-        if (currentResumeState != null) {
+        val noSheetOpen = sheetShown == Sheets.None && panelShown == Panels.None
+        if (currentResumeState != null && noSheetOpen) {
           val overlayDurationSec = playerPreferences.resumeOverlayDuration.get()
           Box(
             modifier = Modifier
               .fillMaxSize()
-              .padding(top = 120.dp),   // below center → beneath the play/pause row
-            contentAlignment = Alignment.Center,
+              .padding(start = 16.dp, top = 120.dp),
+            contentAlignment = Alignment.CenterStart,
           ) {
             ResumePlaybackOverlay(
               positionText = currentResumeState.formattedTime,

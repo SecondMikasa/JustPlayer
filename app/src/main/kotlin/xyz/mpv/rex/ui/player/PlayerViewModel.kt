@@ -2347,7 +2347,14 @@ class PlayerViewModel(
       MPVLib.command("vf", "remove", "@mpvex_hflip")
       MPVLib.command("vf", "remove", "@mpvex_vflip")
 
-      val preferredHwDec = if (decoderPreferences.tryHWDecoding.get()) "mediacodec" else "no"
+      // Restore hwdec - prioritize user's remembered choice if enabled
+      val rememberChoice = decoderPreferences.rememberDecoderChoice.get()
+      val userDecoder = decoderPreferences.userSelectedDecoder.get()
+      val preferredHwDec = if (rememberChoice && userDecoder.isNotBlank()) {
+        userDecoder
+      } else {
+        if (decoderPreferences.tryHWDecoding.get()) "mediacodec" else "no"
+      }
       MPVLib.setPropertyString("hwdec", preferredHwDec)
     }
   }

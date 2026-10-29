@@ -52,6 +52,18 @@ class FolderListViewModel(
   private val _videoFolders = MutableStateFlow<List<VideoFolder>>(emptyList())
   val videoFolders: StateFlow<List<VideoFolder>> = _videoFolders.asStateFlow()
 
+  // Dual-pane selected folder – survives navigation because it lives in the ViewModel
+  private val _selectedFolderBucketId = MutableStateFlow<String?>(null)
+  val selectedFolderBucketId: StateFlow<String?> = _selectedFolderBucketId.asStateFlow()
+
+  private val _selectedFolderName = MutableStateFlow<String?>(null)
+  val selectedFolderName: StateFlow<String?> = _selectedFolderName.asStateFlow()
+
+  fun selectFolder(bucketId: String?, name: String?) {
+    _selectedFolderBucketId.value = bucketId
+    _selectedFolderName.value = name
+  }
+
   // Set of folder paths that have ever had a video played from them
   val playedFolderPaths: StateFlow<Set<String>> =
     recentlyPlayedRepository

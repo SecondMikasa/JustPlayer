@@ -13,6 +13,10 @@ class DecoderPreferences(
   val useVulkan = preferenceStore.getBoolean("use_vulkan", false)
   val useYUV420P = preferenceStore.getBoolean("use_yuv420p", false)
 
+  // Decoder persistence - remember user's decoder choice across video restarts
+  val rememberDecoderChoice = preferenceStore.getBoolean("remember_decoder_choice", false)
+  val userSelectedDecoder = preferenceStore.getString("user_selected_decoder", "")
+
   val debanding = preferenceStore.getEnum("debanding", Debanding.None)
   val debandIterations = preferenceStore.getInt("deband_iterations", 1)
   val debandThreshold = preferenceStore.getInt("deband_threshold", 48)

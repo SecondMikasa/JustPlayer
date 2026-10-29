@@ -180,6 +180,7 @@ fun PlayerControls(
   val appearancePreferences = koinInject<AppearancePreferences>()
   val hideBackground by appearancePreferences.hidePlayerButtonsBackground.collectAsState()
   val playerPreferences = koinInject<PlayerPreferences>()
+  val decoderPreferences = koinInject<xyz.mpv.rex.preferences.DecoderPreferences>()
   val audioPreferences = koinInject<AudioPreferences>()
   val gesturePreferences = koinInject<GesturePreferences>()
   val playerTutorialManager = koinInject<PlayerTutorialManager>()
@@ -1859,7 +1860,13 @@ fun PlayerControls(
         viewModel.unpause()
       },
       decoder = decoder,
-      onUpdateDecoder = { MPVLib.setPropertyString("hwdec", it.value) },
+      onUpdateDecoder = { selectedDecoder ->
+        MPVLib.setPropertyString("hwdec", selectedDecoder.value)
+        // Persist decoder choice if preference is enabled
+        if (decoderPreferences.rememberDecoderChoice.get()) {
+          decoderPreferences.userSelectedDecoder.set(selectedDecoder.value)
+        }
+      },
       speed = playbackSpeed ?: playerPreferences.defaultSpeed.get(),
       onSpeedChange = { MPVLib.setPropertyFloat("speed", it.toFixed(2)) },
       onMakeDefaultSpeed = { playerPreferences.defaultSpeed.set(it.toFixed(2)) },

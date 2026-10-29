@@ -275,6 +275,8 @@
     <string name="pref_decoder_vulkan_title">Use Vulkan</string>
     <string name="pref_decoder_vulkan_summary">Enable Vulkan rendering on supported devices (may improve performance)</string>
     <string name="pref_decoder_vulkan_not_supported">Not supported (requires Android 13+ with Vulkan 1.3)</string>
+    <string name="pref_decoder_remember_choice_title">Remember decoder choice</string>
+    <string name="pref_decoder_remember_choice_summary">Persist your decoder selection (HW+, SW, etc.) across video restarts</string>
 
     <string name="pref_subtitles">Subtitles</string>
     <string name="pref_subtitles_summary">Fonts and loading</string>

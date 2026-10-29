@@ -155,6 +155,23 @@ object DecoderPreferencesScreen : Screen {
 
               PreferenceDivider()
 
+              val rememberDecoderChoice by preferences.rememberDecoderChoice.collectAsState()
+              SwitchPreference(
+                value = rememberDecoderChoice,
+                onValueChange = {
+                  preferences.rememberDecoderChoice.set(it)
+                },
+                title = { Text(stringResource(R.string.pref_decoder_remember_choice_title)) },
+                summary = {
+                  Text(
+                    stringResource(R.string.pref_decoder_remember_choice_summary),
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
+
+              PreferenceDivider()
+
               me.zhanghai.compose.preference.Preference(
                 title = { Text(stringResource(R.string.pref_decoder_codec_info_title)) },
                 summary = {

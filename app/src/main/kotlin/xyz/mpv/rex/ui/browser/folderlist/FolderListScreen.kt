@@ -194,8 +194,9 @@ object FolderListScreen : Screen {
     val hasListAutoScrolled = rememberSaveable(inputs = arrayOf(recentlyPlayedFilePath ?: "")) { mutableStateOf(value = false) }
     val hasGridAutoScrolled = rememberSaveable(inputs = arrayOf(recentlyPlayedFilePath ?: "")) { mutableStateOf(value = false) }
 
-    var selectedFolderBucketId by rememberSaveable { mutableStateOf<String?>(null) }
-    var selectedFolderName by rememberSaveable { mutableStateOf<String?>(null) }
+    // Dual-pane selected folder – now from ViewModel so it survives navigation
+    val selectedFolderBucketId by viewModel.selectedFolderBucketId.collectAsState()
+    val selectedFolderName by viewModel.selectedFolderName.collectAsState()
     val enableDualPane by browserPreferences.enableDualPane.collectAsState()
 
     // Sorting and filtering
@@ -765,10 +766,10 @@ object FolderListScreen : Screen {
                 val activeFolderBucketId = selectedFolderBucketId ?: sortedFolders.firstOrNull()?.bucketId
                 val activeFolderName = selectedFolderName ?: sortedFolders.firstOrNull()?.name ?: ""
 
-                LaunchedEffect(sortedFolders, activeFolderBucketId) {
-                  if (activeFolderBucketId == null && sortedFolders.isNotEmpty()) {
-                    selectedFolderBucketId = sortedFolders.first().bucketId
-                    selectedFolderName = sortedFolders.first().name
+                LaunchedEffect(sortedFolders) {
+                  // Only auto-select first folder if no folder is selected AND folders exist
+                  if (selectedFolderBucketId == null && sortedFolders.isNotEmpty()) {
+                    viewModel.selectFolder(sortedFolders.first().bucketId, sortedFolders.first().name)
                   }
                 }
 
@@ -801,8 +802,7 @@ object FolderListScreen : Screen {
                           selectionManager.toggle(folder)
                         } else {
                           videoSelectionState?.onCancel?.invoke()
-                          selectedFolderBucketId = folder.bucketId
-                          selectedFolderName = folder.name
+                          viewModel.selectFolder(folder.bucketId, folder.name)
                         }
                       },
                       onFolderLongClick = { folder ->

@@ -128,12 +128,16 @@ class MPVView(
       MPVLib.setOptionString("gpu-context", "androidvk")
     }
 
-    // Set hwdec with fallback order: HW+ (mediacodec) -> SW (no)
-    // mediacodec-copy (HW) is omitted as it often causes Surface-related crashes on certain devices
-    MPVLib.setOptionString(
-      "hwdec",
-      if (decoderPreferences.tryHWDecoding.get()) "mediacodec,no" else "no",
-    )
+    // Set hwdec - prioritize user's remembered choice if enabled, otherwise use default fallback
+    val rememberChoice = decoderPreferences.rememberDecoderChoice.get()
+    val userDecoder = decoderPreferences.userSelectedDecoder.get()
+    val hwdecValue = if (rememberChoice && userDecoder.isNotBlank()) {
+      userDecoder
+    } else {
+      // Default fallback order: HW+ (mediacodec) -> SW (no)
+      if (decoderPreferences.tryHWDecoding.get()) "mediacodec,no" else "no"
+    }
+    MPVLib.setOptionString("hwdec", hwdecValue)
     MPVLib.setOptionString("hwdec-codecs", "all")
 
     if (decoderPreferences.useYUV420P.get()) {
