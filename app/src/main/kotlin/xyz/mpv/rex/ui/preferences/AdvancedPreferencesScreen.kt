@@ -37,6 +37,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import xyz.mpv.rex.ui.utils.LocalHighlightedPrefKey
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -87,6 +89,25 @@ object AdvancedPreferencesScreen : Screen {
     var showExportDialog by remember { mutableStateOf(false) }
     var importStats by remember { mutableStateOf<SettingsManager.ImportStats?>(null) }
     var exportStats by remember { mutableStateOf<SettingsManager.ExportStats?>(null) }
+    val highlightedKey = LocalHighlightedPrefKey.current
+    val listState = rememberLazyListState()
+
+    val prefToItemIndex = remember {
+      mapOf(
+        R.string.pref_export_settings_title to 1,
+        R.string.pref_import_settings_title to 1,
+      )
+    }
+
+    LaunchedEffect(highlightedKey) {
+      if (highlightedKey != null) {
+        val itemIndex = prefToItemIndex[highlightedKey]
+        if (itemIndex != null) {
+          kotlinx.coroutines.delay(150)
+          listState.scrollToItem(itemIndex)
+        }
+      }
+    }
 
     // Export settings launcher
     val exportLauncher =
@@ -250,6 +271,7 @@ object AdvancedPreferencesScreen : Screen {
         val mpvConfStorageLocation by preferences.mpvConfStorageUri.collectAsState()
         val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
         LazyColumn(
+          state = listState,
           modifier = Modifier
             .fillMaxSize()
             .padding(padding),

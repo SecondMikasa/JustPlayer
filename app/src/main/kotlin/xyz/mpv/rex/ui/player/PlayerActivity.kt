@@ -28,9 +28,14 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.annotation.RequiresApi
 import androidx.appcompat.app.AppCompatActivity
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
@@ -662,6 +667,34 @@ class PlayerActivity :
             },
             modifier = Modifier,
           )
+        }
+
+        // Resume-playback overlay – sits below the play/pause row, auto-dismisses after the
+        // user-configured duration. Matches the player's glass/flat surface theme via PlayerUpdate.
+        val resumeDialogState by viewModel.resumeDialogState.collectAsState()
+        val currentResumeState = resumeDialogState
+        if (currentResumeState != null) {
+          val overlayDurationSec = playerPreferences.resumeOverlayDuration.get()
+          Box(
+            modifier = Modifier
+              .fillMaxSize()
+              .padding(top = 120.dp),   // below center → beneath the play/pause row
+            contentAlignment = Alignment.Center,
+          ) {
+            ResumePlaybackOverlay(
+              positionText = currentResumeState.formattedTime,
+              durationMs = overlayDurationSec * 1000L,
+              onRestart = {
+                viewModel.dismissResumeDialog()
+                lifecycleScope.launch(Dispatchers.IO) {
+                  runCatching { MPVLib.setPropertyInt("time-pos", 0) }
+                }
+              },
+              onAutoDismiss = {
+                viewModel.dismissResumeDialog()
+              },
+            )
+          }
         }
       }
     }
@@ -1512,16 +1545,13 @@ class PlayerActivity :
    * @return The extracted URI, or null if not found
    */
   private fun extractUriFromIntent(intent: Intent): Uri? =
-    if (intent.type == "text/plain") {
-      intent.getStringExtra(Intent.EXTRA_TEXT)?.toUri()
-    } else {
-      intent.data ?: if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+    if (intent.type == "text/plain") intent.getStringExtra(Intent.EXTRA_TEXT)?.toUri() else
+      intent.data ?: if (Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
         intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
       } else {
         @Suppress("DEPRECATION")
         intent.getParcelableExtra(Intent.EXTRA_STREAM)
       }
-    }
 
   /**
    * Queries the content resolver to get the display name for a URI.
@@ -2515,7 +2545,17 @@ class PlayerActivity :
     viewModel.setVideoZoom(state.videoZoom)
 
     if (playerPreferences.savePositionOnQuit.get() && state != null && state.lastPosition > 3) {
-      MPVLib.setPropertyInt("time-pos", state.lastPosition)
+      if (playerPreferences.askResumePlayback.get()) {
+        // Resume from saved position immediately and show a non-blocking overlay
+        // that lets the user restart from the beginning within a few seconds.
+        MPVLib.setPropertyInt("time-pos", state.lastPosition)
+        val formattedTime = viewModel.formatTimestamp(state.lastPosition.toDouble())
+        withContext(Dispatchers.Main) {
+          viewModel.showResumeDialog(state.lastPosition, formattedTime)
+        }
+      } else {
+        MPVLib.setPropertyInt("time-pos", state.lastPosition)
+      }
     } else {
       MPVLib.setPropertyInt("time-pos", 0)
     }

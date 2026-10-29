@@ -26,6 +26,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
@@ -47,6 +49,8 @@ import xyz.mpv.rex.ui.browser.MainScreen
 import xyz.mpv.rex.ui.theme.DarkMode
 import xyz.mpv.rex.ui.theme.MpvexTheme
 import xyz.mpv.rex.ui.utils.LocalBackStack
+import xyz.mpv.rex.ui.utils.LocalHighlightedPrefKey
+import xyz.mpv.rex.ui.utils.LocalSetHighlightedPrefKey
 import xyz.mpv.rex.utils.permission.PermissionUtils
 import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayer
 import xyz.mpv.rex.ui.browser.miniplayer.MiniPlayerStateManager
@@ -213,6 +217,9 @@ class MainActivity : ComponentActivity() {
     val navBarHeight = if (showBottomBar) 80.dp else 0.dp
     val totalNavigationBarHeight = navBarHeight + miniPlayerHeight
 
+    // State to track which preference should be highlighted when navigating from search results
+    val (highlightedPrefKey, setHighlightedPrefKey) = rememberSaveable { mutableStateOf<Int?>(null) }
+
     BackHandler(enabled = isMainScreen) {
       (context as? Activity)?.moveTaskToBack(true)
     }
@@ -221,12 +228,14 @@ class MainActivity : ComponentActivity() {
     CompositionLocalProvider(
       LocalBackStack provides typedBackstack,
       LocalUpdateViewModel provides updateViewModel,
-      LocalNavigationBarHeight provides totalNavigationBarHeight
+      LocalNavigationBarHeight provides totalNavigationBarHeight,
+      LocalHighlightedPrefKey provides highlightedPrefKey,
+      LocalSetHighlightedPrefKey provides { setHighlightedPrefKey(it) }
     ) {
       Box(modifier = Modifier.fillMaxSize()) {
         NavDisplay(
           backStack = typedBackstack,
-          onBack = { typedBackstack.removeLastOrNull() },
+          onBack = { setHighlightedPrefKey(null); typedBackstack.removeLastOrNull() },
           entryProvider = { route -> NavEntry(route) { route.Content() } },
           popTransitionSpec = {
             (

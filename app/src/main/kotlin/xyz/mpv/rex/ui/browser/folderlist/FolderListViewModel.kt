@@ -78,6 +78,9 @@ class FolderListViewModel(
   private val _isEnriching = MutableStateFlow(false)
   val isEnriching: StateFlow<Boolean> = _isEnriching.asStateFlow()
 
+  // Expose scan state from repository for UI progress tracking
+  val scanState = hybridMediaIndex.scanState
+
   // Track the current scan job to prevent concurrent scans
   private var currentScanJob: Job? = null
 

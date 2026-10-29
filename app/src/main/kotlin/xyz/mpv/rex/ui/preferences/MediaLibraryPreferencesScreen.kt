@@ -22,6 +22,10 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import xyz.mpv.rex.ui.utils.LocalHighlightedPrefKey
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -58,6 +62,25 @@ object MediaLibraryPreferencesScreen : Screen {
     val backstack = LocalBackStack.current
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val highlightedKey = LocalHighlightedPrefKey.current
+    val listState = rememberLazyListState()
+
+    val prefToItemIndex = remember {
+      mapOf(
+        R.string.pref_rescan_library_title to 5,
+        R.string.pref_clear_metadata_cache_title to 5,
+      )
+    }
+
+    LaunchedEffect(highlightedKey) {
+      if (highlightedKey != null) {
+        val itemIndex = prefToItemIndex[highlightedKey]
+        if (itemIndex != null) {
+          kotlinx.coroutines.delay(150)
+          listState.scrollToItem(itemIndex)
+        }
+      }
+    }
 
     val includeNoMediaContent by browserPreferences.includeNoMediaContent.collectAsState()
     val showAudioFiles by browserPreferences.showAudioFiles.collectAsState()
@@ -90,6 +113,7 @@ object MediaLibraryPreferencesScreen : Screen {
       val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
       ProvidePreferenceLocals {
         LazyColumn(
+          state = listState,
           modifier = Modifier
             .fillMaxSize()
             .padding(padding),

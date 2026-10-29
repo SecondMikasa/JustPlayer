@@ -30,6 +30,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import xyz.mpv.rex.ui.utils.LocalHighlightedPrefKey
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -61,6 +64,30 @@ object DecoderPreferencesScreen : Screen {
     val context = LocalContext.current
     val isVulkanSupported = remember { VulkanUtils.isVulkanSupported(context) }
     var showGpuNextWarning by remember { mutableStateOf(false) }
+    val highlightedKey = LocalHighlightedPrefKey.current
+    val listState = rememberLazyListState()
+
+    val prefToItemIndex = remember {
+      mapOf(
+        R.string.pref_decoder_try_hw_dec_title to 1,
+        R.string.pref_decoder_codec_info_title to 1,
+        R.string.pref_decoder_gpu_next_title to 1,
+        R.string.pref_decoder_vulkan_title to 1,
+        R.string.pref_decoder_debanding_title to 1,
+        R.string.pref_decoder_yuv420p_title to 1,
+        R.string.pref_anime4k_title to 1,
+      )
+    }
+
+    LaunchedEffect(highlightedKey) {
+      if (highlightedKey != null) {
+        val itemIndex = prefToItemIndex[highlightedKey]
+        if (itemIndex != null) {
+          kotlinx.coroutines.delay(150)
+          listState.scrollToItem(itemIndex)
+        }
+      }
+    }
     Scaffold(
       topBar = {
         TopAppBar(
@@ -87,6 +114,7 @@ object DecoderPreferencesScreen : Screen {
       val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
       ProvidePreferenceLocals {
         LazyColumn(
+          state = listState,
           modifier =
             Modifier
               .fillMaxSize()

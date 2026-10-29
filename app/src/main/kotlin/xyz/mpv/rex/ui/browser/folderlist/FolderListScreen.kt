@@ -103,6 +103,7 @@ import xyz.mpv.rex.repository.MediaFileRepository
 import xyz.mpv.rex.ui.browser.LocalNavigationBarHeight
 import xyz.mpv.rex.ui.browser.components.BrowserBottomBar
 import xyz.mpv.rex.ui.browser.components.BrowserTopBar
+import xyz.mpv.rex.ui.browser.components.MediaScanLoadingOverlay
 import xyz.mpv.rex.ui.browser.components.SelectionOverflowAction
 import xyz.mpv.rex.ui.browser.components.UnifiedExplorerContent
 import xyz.mpv.rex.ui.browser.dialogs.DeleteConfirmationDialog
@@ -174,6 +175,7 @@ object FolderListScreen : Screen {
     val playedFolderPaths by viewModel.playedFolderPaths.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val hasCompletedInitialLoad by viewModel.hasCompletedInitialLoad.collectAsState()
+    val scanState by viewModel.scanState.collectAsState()
 
     // Preferences
     val mediaLayoutMode by browserPreferences.mediaLayoutMode.collectAsState()
@@ -889,6 +891,15 @@ object FolderListScreen : Screen {
             )
           }
         }
+        
+        // Show loading overlay during initial media scan (on top of content)
+        MediaScanLoadingOverlay(
+          isVisible = isLoading && !hasCompletedInitialLoad,
+          rootName = scanState.rootName,
+          scannedItems = scanState.scannedItems,
+          completedRoots = scanState.completedRoots,
+          totalRoots = scanState.totalRoots,
+        )
       }
 
       // Dialogs

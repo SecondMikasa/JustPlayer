@@ -174,6 +174,51 @@ object PlayerPreferencesScreen : Screen {
                   value = savePositionOnQuit,
                   onValueChange = preferences.savePositionOnQuit::set,
                   title = { Text(stringResource(R.string.pref_player_save_position_on_quit)) },
+                  summary = {
+                    Text(
+                      text = stringResource(R.string.pref_player_save_position_on_quit_summary),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                  },
+                )
+              }
+
+              PreferenceDivider()
+
+              val askResumePlayback by preferences.askResumePlayback.collectAsState()
+              HighlightablePreference(R.string.pref_player_ask_resume_title) {
+                SwitchPreference(
+                  value = askResumePlayback,
+                  onValueChange = preferences.askResumePlayback::set,
+                  enabled = savePositionOnQuit,
+                  title = { Text(stringResource(R.string.pref_player_ask_resume_title)) },
+                  summary = {
+                    Text(
+                      text = stringResource(R.string.pref_player_ask_resume_summary),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                  },
+                )
+              }
+
+              PreferenceDivider()
+
+              val resumeOverlayDuration by preferences.resumeOverlayDuration.collectAsState()
+              HighlightablePreference(R.string.pref_player_resume_overlay_duration_title) {
+                SliderPreference(
+                  value = resumeOverlayDuration.toFloat(),
+                  onValueChange = { preferences.resumeOverlayDuration.set(it.roundToInt()) },
+                  enabled = savePositionOnQuit && askResumePlayback,
+                  title = { Text(stringResource(R.string.pref_player_resume_overlay_duration_title)) },
+                  valueRange = 1f..10f,
+                  summary = {
+                    Text(
+                      text = stringResource(R.string.pref_player_resume_overlay_duration_summary, resumeOverlayDuration),
+                      color = MaterialTheme.colorScheme.outline,
+                    )
+                  },
+                  onSliderValueChange = { preferences.resumeOverlayDuration.set(it.roundToInt()) },
+                  sliderValue = resumeOverlayDuration.toFloat(),
                 )
               }
 

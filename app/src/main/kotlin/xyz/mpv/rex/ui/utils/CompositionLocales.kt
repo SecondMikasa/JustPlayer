@@ -15,3 +15,10 @@ val LocalBackStack: ProvidableCompositionLocal<NavBackStack<Screen>> =
  */
 val LocalHighlightedPrefKey: ProvidableCompositionLocal<Int?> =
   compositionLocalOf { null }
+
+/**
+ * Function to set the highlighted preference key.
+ * Used by settings search to request a highlight when navigating to a preference screen.
+ */
+val LocalSetHighlightedPrefKey: ProvidableCompositionLocal<(Int?) -> Unit> =
+  compositionLocalOf { {} }

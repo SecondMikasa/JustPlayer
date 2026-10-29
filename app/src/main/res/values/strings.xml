@@ -607,6 +607,13 @@
     <string name="pref_player_keep_screen_on_when_paused_title">Keep screen on when paused</string>
     <string name="pref_player_keep_screen_on_when_paused_summary">Prevents screen timeout during pause</string>
     <string name="pref_player_save_position_on_quit_summary">Remember where you left off</string>
+    <string name="pref_player_ask_resume_title">Ask to resume or restart</string>
+    <string name="pref_player_ask_resume_summary">When opening a video mid-way through, ask whether to continue from where you left off or start over from the beginning</string>
+    <string name="resume_overlay_message">Resumed from %1$s</string>
+    <string name="resume_overlay_restart">Restart</string>
+    <string name="pref_player_resume_overlay_duration_title">Resume overlay duration</string>
+    <string name="pref_player_resume_overlay_duration_summary">Overlay stays visible for %1$d seconds before fading away</string>
+    <string name="pref_player_resume_overlay_duration_value">%1$ds</string>
     <string name="pref_player_interaction_header">Player Interaction</string>
 
     <!-- Folders Preferences -->

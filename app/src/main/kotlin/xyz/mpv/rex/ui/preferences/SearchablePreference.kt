@@ -672,6 +672,165 @@ object SearchablePreferences {
                 screen = AdvancedPreferencesScreen,
             ))
 
+            // Missing Appearance Preferences - Tab Related
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_tab_home_title,
+                summaryRes = R.string.pref_appearance_tab_home_summary,
+                keywords = listOf("home", "files", "tab", "folder", "explorer"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_tab_recents_title,
+                summaryRes = R.string.pref_appearance_tab_recents_summary,
+                keywords = listOf("recently", "played", "recents", "tab"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_tab_playlists_title,
+                summaryRes = R.string.pref_appearance_tab_playlists_summary,
+                keywords = listOf("playlist", "playlists", "tab", "custom"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_tab_network_title,
+                summaryRes = R.string.pref_appearance_tab_network_summary,
+                keywords = listOf("network", "streaming", "smb", "ftp", "webdav", "tab"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_tab_music_title,
+                summaryRes = R.string.pref_appearance_tab_music_summary,
+                keywords = listOf("music", "audio", "songs", "albums", "artists", "tab"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_tab_order_title,
+                summaryRes = R.string.pref_appearance_tab_order_summary,
+                keywords = listOf("rearrange", "tabs", "reorder", "order", "arrangement"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_dual_pane_title,
+                summaryRes = R.string.pref_appearance_dual_pane_summary,
+                keywords = listOf("dual", "pane", "panel", "split", "layout", "tablet", "wide"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+
+            // Missing Appearance Preferences - Theme & Colors
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_material_you_title,
+                summaryRes = R.string.pref_appearance_material_you_summary,
+                keywords = listOf("material you", "dynamic", "colors", "theming"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_enable_bounce_animation_title,
+                summaryRes = R.string.pref_appearance_enable_bounce_animation_summary,
+                keywords = listOf("bounce", "animation", "motion", "smooth"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_match_player_controls_to_theme_title,
+                summaryRes = R.string.pref_appearance_match_player_controls_to_theme_summary,
+                keywords = listOf("match", "player", "controls", "theme", "color", "buttons"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_player_always_dark_mode_title,
+                summaryRes = R.string.pref_appearance_player_always_dark_mode_summary,
+                keywords = listOf("player", "always", "dark", "mode", "controls", "theme"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_use_system_font_title,
+                summaryRes = R.string.pref_appearance_use_system_font_summary,
+                keywords = listOf("system", "font", "typeface", "default", "text"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+
+            // Missing Appearance Preferences - File Browser & Thumbnails & Watched
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_show_hidden_files_title,
+                summaryRes = R.string.pref_appearance_show_hidden_files_summary,
+                keywords = listOf("hidden", "files", "show", "system", "folders", "dotfiles"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_thumbnail_strategy_title,
+                summaryRes = R.string.pref_appearance_thumbnail_strategy_summary,
+                keywords = listOf("thumbnail", "strategy", "generation", "extraction", "frame"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_thumbnail_position_title,
+                summaryRes = R.string.pref_appearance_thumbnail_position_summary,
+                keywords = listOf("thumbnail", "position", "frame", "percent", "duration", "extraction"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_appearance_watched_threshold_title,
+                summaryRes = R.string.pref_appearance_watched_threshold_summary,
+                keywords = listOf("watched", "threshold", "percent", "playback", "mark", "complete"),
+                category = "Appearance",
+                screen = AppearancePreferencesScreen,
+            ))
+
+            // Missing Player Preferences
+            add(SearchablePreference(
+                titleRes = R.string.pref_player_resume_on_unlock_title,
+                keywords = listOf("resume", "unlock", "lock", "screen", "playback"),
+                category = "Player",
+                screen = PlayerPreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_player_custom_skip_duration_title,
+                summaryRes = R.string.pref_player_custom_skip_duration_summary,
+                keywords = listOf("custom", "skip", "duration", "button", "forward", "seconds"),
+                category = "Player",
+                screen = PlayerPreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_player_seeking_title,
+                keywords = listOf("seeking", "seek", "navigation", "playback"),
+                category = "Player",
+                screen = PlayerPreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_player_gestures_swipe_to_subtitle_seek_title,
+                summaryRes = R.string.pref_player_gestures_swipe_to_subtitle_seek_summary,
+                keywords = listOf("swipe", "subtitle", "seek", "gesture", "top", "bottom"),
+                category = "Player",
+                screen = PlayerPreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_player_gestures_move_subtitle_by_dragging_title,
+                summaryRes = R.string.pref_player_gestures_move_subtitle_by_dragging_summary,
+                keywords = listOf("drag", "subtitle", "move", "reposition", "gesture", "touch"),
+                category = "Player",
+                screen = PlayerPreferencesScreen,
+            ))
+            add(SearchablePreference(
+                titleRes = R.string.pref_player_controls_disable_media_buttons_title,
+                keywords = listOf("disable", "media", "buttons", "controls", "playback"),
+                category = "Player",
+                screen = PlayerPreferencesScreen,
+            ))
+
             // About
             add(SearchablePreference(
                 titleRes = R.string.pref_about_title,

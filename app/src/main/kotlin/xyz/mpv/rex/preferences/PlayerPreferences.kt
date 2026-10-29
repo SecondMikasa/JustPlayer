@@ -95,6 +95,13 @@ class PlayerPreferences(
   val keepScreenOnWhenPaused = preferenceStore.getBoolean("keep_screen_on_when_paused", false)
   val resumeOnUnlock = preferenceStore.getBoolean("resume_on_unlock", false)
 
+  // When enabled, a dialog asks the user whether to resume from the saved position or restart from
+  // the beginning whenever a video is opened mid-way through.
+  val askResumePlayback = preferenceStore.getBoolean("ask_resume_playback", true)
+
+  // How many seconds the resume overlay stays visible before auto-dismissing (1–10 s, default 3)
+  val resumeOverlayDuration = preferenceStore.getInt("resume_overlay_duration", 3)
+
   // Persist aspect ratio setting (default to Fit)
   val defaultVideoAspect = preferenceStore.getEnum("default_video_aspect", VideoAspect.Fit)
   val defaultCustomAspectRatio = preferenceStore.getObject(

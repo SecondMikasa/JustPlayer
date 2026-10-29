@@ -848,6 +848,8 @@ fun InteractionTab() {
   val hideOsdText by playerPreferences.hideOsdText.collectAsState()
   val keepScreenOnWhenPaused by playerPreferences.keepScreenOnWhenPaused.collectAsState()
   val savePositionOnQuit by playerPreferences.savePositionOnQuit.collectAsState()
+  val askResumePlayback by playerPreferences.askResumePlayback.collectAsState()
+  val resumeOverlayDuration by playerPreferences.resumeOverlayDuration.collectAsState()
   val autoPiPOnNavigation by playerPreferences.autoPiPOnNavigation.collectAsState()
 
   Column(
@@ -932,6 +934,53 @@ fun InteractionTab() {
       checked = savePositionOnQuit,
       onCheckedChange = { playerPreferences.savePositionOnQuit.set(it) }
     )
+
+    InteractionSwitch(
+      label = stringResource(R.string.pref_player_ask_resume_title),
+      description = stringResource(R.string.pref_player_ask_resume_summary),
+      checked = askResumePlayback,
+      enabled = savePositionOnQuit,
+      onCheckedChange = { playerPreferences.askResumePlayback.set(it) }
+    )
+
+    // Duration slider – only active when both parent toggles are on
+    val durationEnabled = savePositionOnQuit && askResumePlayback
+    Surface(
+      shape = MaterialTheme.shapes.medium,
+      color = MaterialTheme.colorScheme.surfaceContainerLow,
+      modifier = Modifier
+        .fillMaxWidth()
+        .alpha(if (durationEnabled) 1f else 0.5f),
+    ) {
+      Column(
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+      ) {
+        Row(
+          modifier = Modifier.fillMaxWidth(),
+          verticalAlignment = Alignment.CenterVertically,
+          horizontalArrangement = Arrangement.SpaceBetween,
+        ) {
+          Text(
+            text = stringResource(R.string.pref_player_resume_overlay_duration_title),
+            style = MaterialTheme.typography.bodyLarge,
+          )
+          Text(
+            text = stringResource(R.string.pref_player_resume_overlay_duration_value, resumeOverlayDuration),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.primary,
+            fontWeight = FontWeight.Bold,
+          )
+        }
+        androidx.compose.material3.Slider(
+          value = resumeOverlayDuration.toFloat(),
+          onValueChange = { playerPreferences.resumeOverlayDuration.set(it.toInt()) },
+          valueRange = 1f..10f,
+          steps = 8, // 1,2,3,4,5,6,7,8,9,10 → 8 steps between
+          enabled = durationEnabled,
+          modifier = Modifier.fillMaxWidth(),
+        )
+      }
+    }
 
     InteractionSwitch(
       label = stringResource(R.string.pref_auto_pip_title),

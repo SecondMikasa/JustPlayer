@@ -96,7 +96,9 @@ object AppearancePreferencesScreen : Screen {
                     R.string.pref_appearance_hide_player_buttons_background_title,
                     R.string.pref_appearance_enable_glass_player_controls_title,
                     R.string.pref_appearance_enable_glass_seekbar_title,
-                    R.string.pref_appearance_player_always_dark_mode_title -> 1
+                    R.string.pref_appearance_player_always_dark_mode_title,
+                    R.string.pref_appearance_material_you_title,
+                    R.string.pref_appearance_enable_bounce_animation_title -> 1
 
                     R.string.pref_appearance_tab_order_title,
                     R.string.pref_appearance_tab_home_title,
@@ -111,6 +113,7 @@ object AppearancePreferencesScreen : Screen {
                     R.string.pref_appearance_unplayed_old_video_days_title,
                     R.string.pref_appearance_auto_scroll_title,
                     R.string.pref_appearance_watched_threshold_title,
+                    R.string.pref_appearance_show_hidden_files_title,
                     R.string.pref_show_audio_files_title,
                     R.string.pref_include_no_media_content_title,
                     R.string.pref_show_tree_view_path_title -> 5

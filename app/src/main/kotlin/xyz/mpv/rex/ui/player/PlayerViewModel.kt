@@ -271,6 +271,21 @@ class PlayerViewModel(
   val panelShown = MutableStateFlow(Panels.None)
   val isSpeedLocked = MutableStateFlow(false)
 
+  // Resume-playback dialog: non-null means the dialog is visible.
+  // Holds the saved position (seconds) and formatted time string so the dialog
+  // can show "Resume from 12:34?" without an extra DB query.
+  data class ResumeDialogState(val positionSec: Int, val formattedTime: String)
+  private val _resumeDialogState = MutableStateFlow<ResumeDialogState?>(null)
+  val resumeDialogState: StateFlow<ResumeDialogState?> = _resumeDialogState.asStateFlow()
+
+  fun showResumeDialog(positionSec: Int, formattedTime: String) {
+    _resumeDialogState.value = ResumeDialogState(positionSec, formattedTime)
+  }
+
+  fun dismissResumeDialog() {
+    _resumeDialogState.value = null
+  }
+
   // Seek state
   private val _seekText = MutableStateFlow<String?>(null)
   val seekText: StateFlow<String?> = _seekText.asStateFlow()

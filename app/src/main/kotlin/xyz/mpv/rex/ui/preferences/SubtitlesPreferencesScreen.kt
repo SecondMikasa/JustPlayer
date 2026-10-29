@@ -31,6 +31,8 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import xyz.mpv.rex.ui.utils.LocalHighlightedPrefKey
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -65,6 +67,27 @@ object SubtitlesPreferencesScreen : Screen {
     val backstack = LocalBackStack.current
     val preferences = koinInject<SubtitlesPreferences>()
     val fileManager = koinInject<FileManager>()
+    val highlightedKey = LocalHighlightedPrefKey.current
+    val listState = rememberLazyListState()
+
+    val prefToItemIndex = remember {
+      mapOf(
+        R.string.pref_subtitles_autoload_title to 1,
+        R.string.player_sheets_sub_override_ass to 1,
+        R.string.player_sheets_sub_scale_by_window to 1,
+        R.string.pref_subtitles_fonts_dir to 1,
+      )
+    }
+
+    LaunchedEffect(highlightedKey) {
+      if (highlightedKey != null) {
+        val itemIndex = prefToItemIndex[highlightedKey]
+        if (itemIndex != null) {
+          kotlinx.coroutines.delay(150)
+          listState.scrollToItem(itemIndex)
+        }
+      }
+    }
 
     Scaffold(
       topBar = {
@@ -139,6 +162,7 @@ object SubtitlesPreferencesScreen : Screen {
 
         val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
         LazyColumn(
+          state = listState,
           modifier =
             Modifier
               .fillMaxSize()

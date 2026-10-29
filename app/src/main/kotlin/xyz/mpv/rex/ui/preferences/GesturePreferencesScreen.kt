@@ -23,6 +23,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import xyz.mpv.rex.ui.utils.LocalHighlightedPrefKey
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -57,6 +60,32 @@ object GesturePreferencesScreen : Screen {
     val backstack = LocalBackStack.current
     val useSingleTapForCenter by preferences.useSingleTapForCenter.collectAsState()
     val useSingleTapForLeftRight by preferences.useSingleTapForLeftRight.collectAsState()
+    val highlightedKey = LocalHighlightedPrefKey.current
+    val listState = rememberLazyListState()
+
+    val prefToItemIndex = remember {
+      mapOf(
+        R.string.pref_player_double_tap_seek_duration to 1,
+        R.string.pref_double_tap_seek_area_width_title to 1,
+        R.string.pref_gesture_double_tap_left_title to 1,
+        R.string.pref_gesture_double_tap_center_title to 1,
+        R.string.pref_gesture_double_tap_right_title to 1,
+        R.string.pref_gesture_use_single_tap_for_center_title to 1,
+        R.string.pref_gesture_media_previous to 3,
+        R.string.pref_gesture_media_play to 3,
+        R.string.pref_gesture_media_next to 3,
+      )
+    }
+
+    LaunchedEffect(highlightedKey) {
+      if (highlightedKey != null) {
+        val itemIndex = prefToItemIndex[highlightedKey]
+        if (itemIndex != null) {
+          kotlinx.coroutines.delay(150)
+          listState.scrollToItem(itemIndex)
+        }
+      }
+    }
 
     var showCustomSeekDialog by remember { mutableStateOf(false) }
     var customSeekValue by remember { mutableStateOf("") }
@@ -87,6 +116,7 @@ object GesturePreferencesScreen : Screen {
       val navBarHeight = xyz.mpv.rex.ui.browser.LocalNavigationBarHeight.current
       ProvidePreferenceLocals {
         LazyColumn(
+          state = listState,
           modifier =
             Modifier
               .fillMaxSize()
