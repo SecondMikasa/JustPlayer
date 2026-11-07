@@ -29,8 +29,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalRippleConfiguration
@@ -148,6 +148,9 @@ fun GestureHandler(
   val currentVolume by viewModel.currentVolume.collectAsState()
   val currentMPVVolume by MPVLib.propInt["volume"].collectAsState()
   val currentBrightness by viewModel.currentBrightness.collectAsState()
+  val currentExtraDim by viewModel.currentExtraDim.collectAsState()
+  val enableExtraDim by playerPreferences.enableExtraDim.collectAsState()
+  val extraDimCap by playerPreferences.extraDimCap.collectAsState()
   val volumeBoostingCap = audioPreferences.volumeBoostCap.get()
   val haptics = LocalHapticFeedback.current
   val coroutineScope = rememberCoroutineScope()
@@ -411,9 +414,12 @@ fun GestureHandler(
           var originalVolume = currentVolume
           var originalMPVVolume = currentMPVVolume
           var originalBrightness = currentBrightness
+          var originalExtraDim = currentExtraDim
           var lastVolumeValue = currentVolume
           var lastMPVVolumeValue = currentMPVVolume ?: 100
           var lastBrightnessValue = currentBrightness
+          var lastExtraDimValue = currentExtraDim
+          var extraDimStartingY = 0f
           val brightnessGestureSens = 0.0022f
           val volumeGestureSens = 0.035f
           val mpvVolumeGestureSens = 0.035f
@@ -548,12 +554,15 @@ fun GestureHandler(
                             viewModel.isVerticalGestureActive.value = true
                             startingY = 0f
                             mpvVolumeStartingY = 0f
+                            extraDimStartingY = 0f
                             originalVolume = currentVolume
                             originalMPVVolume = currentMPVVolume
                             originalBrightness = currentBrightness
+                            originalExtraDim = currentExtraDim
                             lastVolumeValue = currentVolume
                             lastMPVVolumeValue = currentMPVVolume ?: 100
                             lastBrightnessValue = currentBrightness
+                            lastExtraDimValue = currentExtraDim
                           }
                         }
                       }
@@ -701,17 +710,52 @@ fun GestureHandler(
                           viewModel.displayVolumeSlider()
                         }
                         val changeBrightness: () -> Unit = {
-                          if (startingY == 0f) startingY = currentPosition.y
-                          val newBrightness = calculateNewVerticalGestureValue(
-                            originalBrightness,
-                            startingY,
-                            currentPosition.y,
-                            brightnessGestureSens,
-                          )
+                          val maxDim = (extraDimCap / 100f).coerceIn(0.1f, 1f)
+                          val isIncreasingExtraDim: (Float) -> Boolean = {
+                            enableExtraDim && currentBrightness <= 0.001f &&
+                              currentExtraDim < maxDim && (currentExtraDim > 0f || amount > 0)
+                          }
+                          val isDecreasingExtraDim: (Float) -> Boolean = {
+                            enableExtraDim && currentBrightness <= 0.001f &&
+                              currentExtraDim > 0f && amount < 0
+                          }
 
-                          if (abs(newBrightness - lastBrightnessValue) > 0.001f) {
-                            viewModel.changeBrightnessTo(newBrightness)
-                            lastBrightnessValue = newBrightness
+                          if (isIncreasingExtraDim(amount) || isDecreasingExtraDim(amount)) {
+                            if (extraDimStartingY == 0f) {
+                              startingY = 0f
+                              originalBrightness = currentBrightness
+                              extraDimStartingY = currentPosition.y
+                              originalExtraDim = currentExtraDim
+                              haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            }
+                            val delta = (currentPosition.y - extraDimStartingY) * brightnessGestureSens
+                            val newExtraDim = (originalExtraDim + delta).coerceIn(0f, maxDim)
+
+                            if (abs(newExtraDim - lastExtraDimValue) > 0.001f) {
+                              viewModel.changeExtraDimTo(newExtraDim)
+                              lastExtraDimValue = newExtraDim
+                            }
+                          } else {
+                            if (startingY == 0f) {
+                              extraDimStartingY = 0f
+                              originalExtraDim = currentExtraDim
+                              startingY = currentPosition.y
+                              originalBrightness = currentBrightness
+                              if (currentExtraDim > 0f) {
+                                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                              }
+                            }
+                            val newBrightness = calculateNewVerticalGestureValue(
+                              originalBrightness,
+                              startingY,
+                              currentPosition.y,
+                              brightnessGestureSens,
+                            ).coerceIn(0f, 1f)
+
+                            if (abs(newBrightness - lastBrightnessValue) > 0.001f) {
+                              viewModel.changeBrightnessTo(newBrightness)
+                              lastBrightnessValue = newBrightness
+                            }
                           }
 
                           viewModel.displayBrightnessSlider()
@@ -746,9 +790,12 @@ fun GestureHandler(
                       isVerticalGestureActive = false
                       viewModel.isVerticalGestureActive.value = false
                       startingY = 0f
+                      mpvVolumeStartingY = 0f
+                      extraDimStartingY = 0f
                       lastVolumeValue = currentVolume
                       lastMPVVolumeValue = currentMPVVolume ?: 100
                       lastBrightnessValue = currentBrightness
+                      lastExtraDimValue = currentExtraDim
                     }
                   }
                   "subtitle_pos" -> {
@@ -800,9 +847,12 @@ fun GestureHandler(
                 isVerticalGestureActive = false
                 viewModel.isVerticalGestureActive.value = false
                 startingY = 0f
+                mpvVolumeStartingY = 0f
+                extraDimStartingY = 0f
                 lastVolumeValue = currentVolume
                 lastMPVVolumeValue = currentMPVVolume ?: 100
                 lastBrightnessValue = currentBrightness
+                lastExtraDimValue = currentExtraDim
               }
             }
             "subtitle_pos" -> {
@@ -1390,7 +1440,7 @@ fun CombiningChevronsAnimation(
         Box {
              // Static Chevron
              Icon(
-                imageVector = if (isRight) Icons.Filled.KeyboardArrowRight else Icons.Filled.KeyboardArrowLeft,
+                imageVector = if (isRight) Icons.AutoMirrored.Filled.KeyboardArrowRight else Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                 contentDescription = null,
                 tint = Color.White,
                 modifier = Modifier.size(48.dp)
@@ -1429,7 +1479,7 @@ fun MovingChevron(
     val alpha = 1f - progress.value
     
     Icon(
-        imageVector = if (isRight) Icons.Filled.KeyboardArrowRight else Icons.Filled.KeyboardArrowLeft,
+        imageVector = if (isRight) Icons.AutoMirrored.Filled.KeyboardArrowRight else Icons.AutoMirrored.Filled.KeyboardArrowLeft,
         contentDescription = null,
         tint = Color.White,
         modifier = Modifier

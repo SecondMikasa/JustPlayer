@@ -569,10 +569,21 @@ class PlayerActivity :
       }
     }
 
+    // Observe extra dim to adjust black scrim overlay
+    lifecycleScope.launch {
+      viewModel.currentExtraDim.collect { extraDim ->
+        val maxAlpha = 0.85f
+        val targetAlpha = (extraDim * maxAlpha).coerceIn(0f, maxAlpha)
+        binding.extraDimOverlay.alpha = targetAlpha
+        binding.extraDimOverlay.visibility = if (targetAlpha > 0.005f) View.VISIBLE else View.GONE
+      }
+    }
+
     window.attributes.layoutInDisplayCutoutMode =
       WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
   }
 
+  @Suppress("DEPRECATION")
   override fun attachBaseContext(newBase: Context?) {
     if (newBase == null) {
       super.attachBaseContext(null)
@@ -671,20 +682,22 @@ class PlayerActivity :
           )
         }
 
-        // Resume-playback overlay – left-aligned below the play/pause row for easy thumb access.
+        // Resume-playback overlay – positioned above the player controls area.
         // Hidden whenever any sheet or panel is open so it never renders on top of them.
         val resumeDialogState by viewModel.resumeDialogState.collectAsState()
         val sheetShown by viewModel.sheetShown.collectAsState()
         val panelShown by viewModel.panelShown.collectAsState()
+        val isLoading by viewModel.isLoading.collectAsState()
         val currentResumeState = resumeDialogState
         val noSheetOpen = sheetShown == Sheets.None && panelShown == Panels.None
-        if (currentResumeState != null && noSheetOpen) {
+        // Only show after video loading is complete to avoid overlaying during buffering
+        if (currentResumeState != null && noSheetOpen && !isLoading) {
           val overlayDurationSec = playerPreferences.resumeOverlayDuration.get()
           Box(
             modifier = Modifier
               .fillMaxSize()
-              .padding(start = 16.dp, top = 120.dp),
-            contentAlignment = Alignment.CenterStart,
+              .padding(start = 16.dp, bottom = 140.dp),
+            contentAlignment = Alignment.BottomStart,
           ) {
             ResumePlaybackOverlay(
               positionText = currentResumeState.formattedTime,
@@ -1034,9 +1047,15 @@ class PlayerActivity :
       }
 
       if (playerPreferences.rememberBrightness.get()) {
-        val brightness = playerPreferences.defaultBrightness.get()
-        if (brightness != BRIGHTNESS_NOT_SET) {
-          viewModel.changeBrightnessTo(brightness)
+        val extraDim = playerPreferences.defaultExtraDim.get()
+        if (extraDim > 0f) {
+          viewModel.changeBrightnessTo(0f)
+          viewModel.changeExtraDimTo(extraDim)
+        } else {
+          val brightness = playerPreferences.defaultBrightness.get()
+          if (brightness != BRIGHTNESS_NOT_SET) {
+            viewModel.changeBrightnessTo(brightness)
+          }
         }
       }
       
@@ -1059,6 +1078,7 @@ class PlayerActivity :
   }
 
   @RequiresApi(Build.VERSION_CODES.P)
+  @Suppress("DEPRECATION")
   private fun setupSystemUI() {
     window.attributes.layoutInDisplayCutoutMode =
       WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
@@ -1645,7 +1665,7 @@ class PlayerActivity :
         val state = playbackStateRepository.getVideoDataByTitle(targetFileName)
         if (state?.savedOrientation != null && state.savedOrientation != ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
           withContext(Dispatchers.Main) {
-            requestedOrientation = state.savedOrientation!!
+            requestedOrientation = state.savedOrientation
             isOrientationRestored = true
             Log.d(TAG, "applyInitialOrientationFromIntent - Smart mode: using restored orientation $requestedOrientation from DB")
           }
@@ -2258,7 +2278,7 @@ class PlayerActivity :
               val artist = runCatching { MPVLib.getPropertyString("metadata/artist") }.getOrNull() ?: ""
               val currentUri = uri
               lifecycleScope.launch(Dispatchers.IO) {
-                val thumbnail = currentUri?.let { extractThumbnailOrCoverArt(it) }
+                val thumbnail = extractThumbnailOrCoverArt(currentUri)
                 withContext(Dispatchers.Main) {
                   MediaPlaybackService.thumbnail = thumbnail
                   mediaPlaybackService?.setMediaInfo(title = fileName, artist = artist, thumbnail = thumbnail)
@@ -2549,7 +2569,7 @@ class PlayerActivity :
     MPVLib.setPropertyDouble("video-zoom", state.videoZoom.toDouble())
     viewModel.setVideoZoom(state.videoZoom)
 
-    if (playerPreferences.savePositionOnQuit.get() && state != null && state.lastPosition > 3) {
+    if (playerPreferences.savePositionOnQuit.get() && state.lastPosition > 3) {
       if (playerPreferences.askResumePlayback.get()) {
         // Resume from saved position immediately and show a non-blocking overlay
         // that lets the user restart from the beginning within a few seconds.
@@ -3429,7 +3449,7 @@ class PlayerActivity :
     val size = file?.length() ?: 0L
     val dateModified = file?.lastModified() ?: 0L
     val isAudio = mimeType?.startsWith("audio/") == true || FileTypeUtils.isAudioFile(file ?: File(path))
-    val name = extractFileNameFromUri(uri) ?: uri.lastPathSegment ?: "Media"
+    val name = extractFileNameFromUri(uri)
 
     val cachedMeta = file?.let { metadataCache.getOrExtractMetadata(it, uri, name) }
     val duration = cachedMeta?.durationMs ?: (runCatching { MPVLib.getPropertyDouble("duration")?.times(1000) }.getOrNull())?.toLong() ?: 0L
@@ -3589,6 +3609,7 @@ class PlayerActivity :
       requestedOrientation = value
     }
 
+  @Suppress("DEPRECATION")
   override fun syncSystemBars(showStatusBar: Boolean, showNavBar: Boolean) {
     if (isCurrentMediaAudio()) return
     try {
@@ -3608,7 +3629,6 @@ class PlayerActivity :
         windowInsetsController.hide(WindowInsetsCompat.Type.navigationBars())
       }
 
-      @Suppress("DEPRECATION")
       var flags = View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY or
         View.SYSTEM_UI_FLAG_LAYOUT_STABLE or
         View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN or

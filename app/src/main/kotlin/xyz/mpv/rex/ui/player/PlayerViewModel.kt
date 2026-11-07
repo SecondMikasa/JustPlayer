@@ -257,6 +257,7 @@ class PlayerViewModel(
   val isVolumeSliderShown = MutableStateFlow(false)
   val volumeSliderTimestamp = MutableStateFlow(0L)
   val brightnessSliderTimestamp = MutableStateFlow(0L)
+  val currentExtraDim = MutableStateFlow(0f)
   val currentBrightness =
     MutableStateFlow(
       runCatching {
@@ -1143,6 +1144,9 @@ class PlayerViewModel(
 
   fun changeBrightnessTo(brightness: Float) {
     val coercedBrightness = brightness.coerceIn(0f, 1f)
+    if (coercedBrightness > 0f && currentExtraDim.value > 0f) {
+      changeExtraDimTo(0f)
+    }
     host.hostWindow.attributes =
       host.hostWindow.attributes.apply {
         screenBrightness = coercedBrightness
@@ -1152,6 +1156,22 @@ class PlayerViewModel(
     // Save brightness to preferences if enabled
     if (playerPreferences.rememberBrightness.get()) {
       playerPreferences.defaultBrightness.set(coercedBrightness)
+    }
+  }
+
+  fun changeExtraDimTo(dim: Float) {
+    val cap = (playerPreferences.extraDimCap.get() / 100f).coerceIn(0.1f, 1f)
+    val coerced = dim.coerceIn(0f, cap)
+    currentExtraDim.value = coerced
+    if (coerced > 0f) {
+      host.hostWindow.attributes =
+        host.hostWindow.attributes.apply {
+          screenBrightness = 0f
+        }
+      currentBrightness.value = 0f
+    }
+    if (playerPreferences.rememberBrightness.get()) {
+      playerPreferences.defaultExtraDim.set(coerced)
     }
   }
 

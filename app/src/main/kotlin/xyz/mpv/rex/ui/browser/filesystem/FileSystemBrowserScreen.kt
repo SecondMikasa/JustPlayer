@@ -180,6 +180,7 @@ fun FileSystemBrowserScreen(path: String? = null) {
   val context = LocalContext.current
   val backstack = LocalBackStack.current
   val coroutineScope = rememberCoroutineScope()
+  @Suppress("DEPRECATION")
   val clipboardManager = LocalClipboardManager.current
   val browserPreferences = koinInject<BrowserPreferences>()
   val playerPreferences = koinInject<xyz.mpv.rex.preferences.PlayerPreferences>()

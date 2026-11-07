@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -105,8 +106,8 @@ fun MediaScanLoadingOverlay(
           LinearProgressIndicator(
             progress = { progress },
             modifier = Modifier
-              .height(4.dp)
-              .fillMaxSize(0.6f),
+              .fillMaxWidth(0.6f)
+              .height(4.dp),
             color = MaterialTheme.colorScheme.primary,
             trackColor = MaterialTheme.colorScheme.surfaceVariant,
           )

@@ -788,6 +788,7 @@ object FolderListScreen : Screen {
                       isRefreshing = isRefreshing,
                       isLoading = isLoading,
                       hasCompletedInitialLoad = hasCompletedInitialLoad,
+                      isScanning = scanState.isScanning,
                       recentlyPlayedFilePath = recentlyPlayedFilePath,
                       recentlyPlayedFilePaths = recentlyPlayedFilePaths,
                       recentlyPlayedPaths = recentlyPlayedPaths,
@@ -861,6 +862,7 @@ object FolderListScreen : Screen {
                   isRefreshing = isRefreshing,
                   isLoading = isLoading,
                   hasCompletedInitialLoad = hasCompletedInitialLoad,
+                  isScanning = scanState.isScanning,
                   recentlyPlayedFilePath = recentlyPlayedFilePath,
                   recentlyPlayedFilePaths = recentlyPlayedFilePaths,
                   recentlyPlayedPaths = recentlyPlayedPaths,
@@ -892,9 +894,11 @@ object FolderListScreen : Screen {
           }
         }
         
+        val isInitialScan = (scanState.isScanning || (isLoading && !hasCompletedInitialLoad)) && sortedFolders.isEmpty()
+        
         // Show loading overlay during initial media scan (on top of content)
         MediaScanLoadingOverlay(
-          isVisible = isLoading && !hasCompletedInitialLoad,
+          isVisible = isInitialScan && permissionState.status is PermissionStatus.Granted,
           rootName = scanState.rootName,
           scannedItems = scanState.scannedItems,
           completedRoots = scanState.completedRoots,
@@ -1104,6 +1108,7 @@ private fun FolderListContent(
   playedFolderPaths: Set<String>,
   isLoading: Boolean,
   hasCompletedInitialLoad: Boolean,
+  isScanning: Boolean = false,
   folderGridColumns: Int,
   listState: LazyListState,
   gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
@@ -1117,7 +1122,7 @@ private fun FolderListContent(
   activeFolderBucketId: String? = null,
   isDualPaneActive: Boolean = false,
 ) {
-  val showLoading = isLoading && !hasCompletedInitialLoad
+  val showLoading = (isLoading || isScanning) && (!hasCompletedInitialLoad || folders.isEmpty())
 
   Box(modifier = Modifier.fillMaxSize()) {
     UnifiedExplorerContent(

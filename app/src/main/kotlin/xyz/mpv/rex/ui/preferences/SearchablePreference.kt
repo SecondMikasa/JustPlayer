@@ -240,6 +240,13 @@ object SearchablePreferences {
                  screen = PlayerPreferencesScreen,
              ))
             add(SearchablePreference(
+                titleRes = R.string.pref_player_gestures_extra_dim,
+                summaryRes = R.string.pref_player_gestures_extra_dim_summary,
+                keywords = listOf("brightness", "dim", "extra dim", "dark", "night", "gesture"),
+                category = "Player",
+                screen = PlayerPreferencesScreen,
+            ))
+            add(SearchablePreference(
                 titleRes = R.string.pref_player_gestures_brightness,
                 keywords = listOf("brightness", "gesture", "swipe", "display", "control"),
                 category = "Player",

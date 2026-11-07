@@ -76,6 +76,8 @@ object PlayerPreferencesScreen : Screen {
         R.string.pref_player_hide_osd_text_title to 5,
         R.string.pref_player_custom_skip_duration_title to 5,
         R.string.pref_player_gestures_brightness to 7,
+        R.string.pref_player_gestures_extra_dim to 7,
+        R.string.pref_player_extra_dim_cap to 7,
         R.string.pref_player_gestures_volume to 7,
         R.string.pref_player_gestures_pinch_to_zoom to 7,
         R.string.pref_player_gestures_pan_and_zoom to 7,
@@ -510,6 +512,47 @@ object PlayerPreferencesScreen : Screen {
                   onValueChange = preferences.brightnessGesture::set,
                   title = { Text(stringResource(R.string.pref_player_gestures_brightness)) },
                 )
+              }
+
+              if (brightnessGesture) {
+                PreferenceDivider()
+
+                val enableExtraDim by preferences.enableExtraDim.collectAsState()
+                HighlightablePreference(R.string.pref_player_gestures_extra_dim) {
+                  SwitchPreference(
+                    value = enableExtraDim,
+                    onValueChange = preferences.enableExtraDim::set,
+                    title = { Text(stringResource(R.string.pref_player_gestures_extra_dim)) },
+                    summary = {
+                      Text(
+                        stringResource(R.string.pref_player_gestures_extra_dim_summary),
+                        color = MaterialTheme.colorScheme.outline,
+                      )
+                    },
+                  )
+                }
+
+                if (enableExtraDim) {
+                  PreferenceDivider()
+
+                  val extraDimCap by preferences.extraDimCap.collectAsState()
+                  HighlightablePreference(R.string.pref_player_extra_dim_cap) {
+                    SliderPreference(
+                      value = extraDimCap.toFloat(),
+                      onValueChange = { preferences.extraDimCap.set(it.toInt()) },
+                      title = { Text(stringResource(R.string.pref_player_extra_dim_cap)) },
+                      valueRange = 10f..100f,
+                      summary = {
+                        Text(
+                          "$extraDimCap%",
+                          color = MaterialTheme.colorScheme.outline,
+                        )
+                      },
+                      onSliderValueChange = { preferences.extraDimCap.set(it.toInt()) },
+                      sliderValue = extraDimCap.toFloat(),
+                    )
+                  }
+                }
               }
 
               PreferenceDivider()

@@ -23,6 +23,8 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BrightnessHigh
 import androidx.compose.material.icons.filled.BrightnessLow
 import androidx.compose.material.icons.filled.BrightnessMedium
+import androidx.compose.material.icons.filled.Nightlight
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -72,6 +74,7 @@ fun VerticalSlider(
   modifier: Modifier = Modifier,
   overflowValue: Float? = null,
   overflowRange: ClosedFloatingPointRange<Float>? = null,
+  overflowColor: Color = MaterialTheme.colorScheme.errorContainer,
   isActive: Boolean = false
 ) {
   val coercedValue = value.coerceIn(range)
@@ -173,7 +176,7 @@ fun VerticalSlider(
           Modifier
             .fillMaxWidth()
             .fillMaxHeight(overflowHeight)
-            .background(MaterialTheme.colorScheme.errorContainer),
+            .background(overflowColor),
         )
       }
     }
@@ -299,11 +302,92 @@ fun BrightnessSlider(
   brightness: Float,
   range: ClosedFloatingPointRange<Float>,
   modifier: Modifier = Modifier,
-  isActive: Boolean = false
+  extraDim: Float = 0f,
+  extraDimRange: ClosedFloatingPointRange<Float>? = null,
+  isActive: Boolean = false,
+  onBrightnessChange: ((Float) -> Unit)? = null,
+  onExtraDimChange: ((Float) -> Unit)? = null,
+  onInteractionChange: ((Boolean) -> Unit)? = null,
 ) {
-  val coercedBrightness = brightness.coerceIn(range)
+  val currentBrightness by rememberUpdatedState(brightness)
+  val currentExtraDim by rememberUpdatedState(extraDim)
+  val currentOnBrightnessChange by rememberUpdatedState(onBrightnessChange)
+  val currentOnExtraDimChange by rememberUpdatedState(onExtraDimChange)
+  val currentOnInteractionChange by rememberUpdatedState(onInteractionChange)
+
+  var isDragging by remember { mutableStateOf(false) }
+  var activeLevel by remember { mutableFloatStateOf(0f) }
+  val trackHeightPx = remember { mutableFloatStateOf(300f) }
+
+  val normalRangeSize = (range.endInclusive - range.start).coerceAtLeast(0.001f)
+  val maxDim = extraDimRange?.let { (it.endInclusive - it.start).coerceAtLeast(0f) } ?: 0f
+  val totalRangeSize = normalRangeSize + maxDim
+
+  val dragModifier = if (onBrightnessChange != null) {
+    Modifier.pointerInput(range, extraDimRange) {
+      detectVerticalDragGestures(
+        onDragStart = {
+          isDragging = true
+          activeLevel = if (currentExtraDim > 0.001f && maxDim > 0f) {
+            (maxDim - currentExtraDim).coerceIn(0f, maxDim)
+          } else {
+            maxDim + (currentBrightness - range.start).coerceIn(0f, normalRangeSize)
+          }
+          currentOnInteractionChange?.invoke(true)
+        },
+        onDragEnd = {
+          isDragging = false
+          currentOnInteractionChange?.invoke(false)
+        },
+        onDragCancel = {
+          isDragging = false
+          currentOnInteractionChange?.invoke(false)
+        },
+        onVerticalDrag = { change, dragAmount ->
+          change.consume()
+          val sliderHeightPx = trackHeightPx.floatValue.coerceAtLeast(1f)
+          val delta = (-dragAmount / sliderHeightPx) * totalRangeSize
+          activeLevel = (activeLevel + delta).coerceIn(0f, totalRangeSize)
+
+          if (activeLevel >= maxDim) {
+            val targetBrightness = (range.start + (activeLevel - maxDim)).coerceIn(range.start, range.endInclusive)
+            currentOnBrightnessChange?.invoke(targetBrightness)
+            if (currentExtraDim > 0f) {
+              currentOnExtraDimChange?.invoke(0f)
+            }
+          } else {
+            currentOnBrightnessChange?.invoke(0f)
+            if (extraDimRange != null && currentOnExtraDimChange != null) {
+              val targetExtraDim = (maxDim - activeLevel).coerceIn(extraDimRange.start, extraDimRange.endInclusive)
+              currentOnExtraDimChange?.invoke(targetExtraDim)
+            }
+          }
+        },
+      )
+    }
+  } else {
+    Modifier
+  }
+
+  val displayBrightness = if (isDragging) {
+    if (activeLevel >= maxDim) (range.start + (activeLevel - maxDim)).coerceIn(range.start, range.endInclusive) else 0f
+  } else {
+    brightness.coerceIn(range)
+  }
+
+  val displayExtraDim = if (isDragging && extraDimRange != null) {
+    if (activeLevel < maxDim) (maxDim - activeLevel).coerceIn(extraDimRange.start, extraDimRange.endInclusive) else 0f
+  } else {
+    extraDim
+  }
+
+  val isDimActive = displayExtraDim > 0.005f
+  val extraDimColor = Color(0xFFFF9800) // Warm amber indicating extra dim mode
+
   Surface(
-    modifier = modifier,
+    modifier = modifier
+      .then(dragModifier)
+      .onSizeChanged { if (it.height > 0) trackHeightPx.floatValue = it.height.toFloat() },
     shape = RoundedCornerShape(20.dp),
     color = MaterialTheme.colorScheme.surfaceContainer.copy(alpha = 0.55f),
     contentColor = MaterialTheme.colorScheme.onSurface,
@@ -317,22 +401,35 @@ fun BrightnessSlider(
       verticalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.smaller),
     ) {
       Text(
-        (coercedBrightness * 100).toInt().toString(),
+        if (isDimActive) {
+          "-${(displayExtraDim * 100).roundToInt()}"
+        } else {
+          (displayBrightness * 100).toInt().toString()
+        },
         style = MaterialTheme.typography.bodySmall,
+        color = if (isDimActive) extraDimColor else MaterialTheme.colorScheme.onSurface,
       )
       VerticalSlider(
-        coercedBrightness,
-        range,
-        isActive = isActive
+        value = displayBrightness,
+        range = range,
+        overflowValue = if (isDimActive) displayExtraDim else null,
+        overflowRange = extraDimRange,
+        overflowColor = extraDimColor,
+        isActive = isActive || isDragging,
       )
       Icon(
-        when (percentage(coercedBrightness, range)) {
-          in 0f..0.3f -> Icons.Default.BrightnessLow
-          in 0.3f..0.6f -> Icons.Default.BrightnessMedium
-          in 0.6f..1f -> Icons.Default.BrightnessHigh
-          else -> Icons.Default.BrightnessMedium
+        if (isDimActive) {
+          Icons.Default.Nightlight
+        } else {
+          when (percentage(displayBrightness, range)) {
+            in 0f..0.3f -> Icons.Default.BrightnessLow
+            in 0.3f..0.6f -> Icons.Default.BrightnessMedium
+            in 0.6f..1f -> Icons.Default.BrightnessHigh
+            else -> Icons.Default.BrightnessMedium
+          }
         },
         contentDescription = null,
+        tint = if (isDimActive) extraDimColor else LocalContentColor.current,
       )
     }
   }

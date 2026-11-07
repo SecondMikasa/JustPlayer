@@ -762,6 +762,16 @@ fun GesturesTab() {
       onCheckedChange = { playerPreferences.brightnessGesture.set(it) }
     )
 
+    if (brightnessGesture) {
+      val enableExtraDim by playerPreferences.enableExtraDim.collectAsState()
+      InteractionSwitch(
+        label = stringResource(R.string.pref_player_gestures_extra_dim),
+        description = stringResource(R.string.pref_player_gestures_extra_dim_summary),
+        checked = enableExtraDim,
+        onCheckedChange = { playerPreferences.enableExtraDim.set(it) }
+      )
+    }
+
     InteractionSwitch(
       label = stringResource(R.string.pref_player_gestures_volume),
       description = stringResource(R.string.pref_player_gestures_volume),

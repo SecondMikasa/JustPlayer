@@ -493,7 +493,23 @@ fun PlayerControls(
               top.linkTo(parent.top, spacing.larger)
               bottom.linkTo(parent.bottom, spacing.extraLarge)
             },
-        ) { BrightnessSlider(brightness, 0f..1f, isActive = isVerticalGestureActive) }
+        ) {
+          val extraDim by viewModel.currentExtraDim.collectAsState()
+          val enableExtraDim by playerPreferences.enableExtraDim.collectAsState()
+          val extraDimCap by playerPreferences.extraDimCap.collectAsState()
+          BrightnessSlider(
+            brightness = brightness,
+            range = 0f..1f,
+            extraDim = extraDim,
+            extraDimRange = if (enableExtraDim) 0f..(extraDimCap / 100f) else null,
+            isActive = isVerticalGestureActive,
+            onBrightnessChange = { viewModel.changeBrightnessTo(it) },
+            onExtraDimChange = { viewModel.changeExtraDimTo(it) },
+            onInteractionChange = { interacting ->
+              if (interacting) viewModel.displayBrightnessSlider()
+            }
+          )
+        }
 
         AnimatedVisibility(
           isVolumeSliderShown,

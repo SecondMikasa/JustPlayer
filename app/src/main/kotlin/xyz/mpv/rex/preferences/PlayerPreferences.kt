@@ -23,6 +23,8 @@ class PlayerPreferences(
   val usePreciseSeeking = preferenceStore.getBoolean("use_precise_seeking", false)
 
   val brightnessGesture = preferenceStore.getBoolean("gestures_brightness", true)
+  val enableExtraDim = preferenceStore.getBoolean("enable_extra_dim", true)
+  val extraDimCap = preferenceStore.getInt("player_extra_dim_cap", 80)
   val volumeGesture = preferenceStore.getBoolean("volume_brightness", true)
   val pinchToZoomGesture = preferenceStore.getBoolean("pinch_to_zoom_gesture", true)
   val horizontalSwipeToSeek = preferenceStore.getBoolean("horizontal_swipe_to_seek", true)
@@ -47,6 +49,7 @@ class PlayerPreferences(
 
   val rememberBrightness = preferenceStore.getBoolean("remember_brightness")
   val defaultBrightness = preferenceStore.getFloat("default_brightness", -1f)
+  val defaultExtraDim = preferenceStore.getFloat("default_extra_dim", 0f)
 
   val allowGesturesInPanels = preferenceStore.getBoolean("allow_gestures_in_panels")
   val showSystemStatusBar = preferenceStore.getBoolean("show_system_status_bar")

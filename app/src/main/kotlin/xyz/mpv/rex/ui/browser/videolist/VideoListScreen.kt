@@ -164,6 +164,7 @@ data class VideoListScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val backstack = LocalBackStack.current
+    @Suppress("DEPRECATION")
     val clipboardManager = LocalClipboardManager.current
     val browserPreferences = koinInject<BrowserPreferences>()
     val playerPreferences = koinInject<PlayerPreferences>()

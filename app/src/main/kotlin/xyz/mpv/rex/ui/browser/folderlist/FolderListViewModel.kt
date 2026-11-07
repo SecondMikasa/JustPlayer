@@ -122,6 +122,18 @@ class FolderListViewModel(
       loadData()
     }
 
+    // Observe background index scanning to reload once scanning finishes
+    viewModelScope.launch {
+      var wasScanning = false
+      scanState.collect { state ->
+        if (wasScanning && !state.isScanning) {
+          Log.d(TAG, "Hybrid scan finished, reloading folders")
+          loadVideoFolders()
+        }
+        wasScanning = state.isScanning
+      }
+    }
+
     // Note: BaseBrowserViewModel handles MediaLibraryEvents.changes and playback state observation centrally.
 
     // Filter folders based on blacklist and audio visibility
@@ -182,6 +194,9 @@ class FolderListViewModel(
 
   private fun saveFoldersToCache(folders: List<VideoFolder>) {
     try {
+      if (folders.isEmpty() && !_foldersWereDeleted.value) {
+        return
+      }
       val json = serializeFoldersToJson(folders)
       val prefs =
         getApplication<Application>().getSharedPreferences("folder_cache", android.content.Context.MODE_PRIVATE)
@@ -229,6 +244,9 @@ class FolderListViewModel(
   override fun refresh(silent: Boolean) {
     viewModelScope.launch(Dispatchers.IO) {
       if (!silent) _isLoading.value = true
+      if (_allVideoFolders.value.isEmpty()) {
+        _hasCompletedInitialLoad.value = false
+      }
       currentScanJob?.cancel()
       currentScanJob = null
       hybridMediaIndex.ensureFresh(force = true, userInitiated = !silent)
@@ -276,7 +294,7 @@ class FolderListViewModel(
 
         _allVideoFolders.value = folders
         _isLoading.value = false
-        _hasCompletedInitialLoad.value = true
+        _hasCompletedInitialLoad.value = folders.isNotEmpty() || !scanState.value.isScanning
       } catch (e: Exception) {
         Log.e(TAG, "Error loading video folders", e)
         _isLoading.value = false
