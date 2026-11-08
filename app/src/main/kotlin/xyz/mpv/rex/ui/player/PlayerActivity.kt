@@ -690,8 +690,9 @@ class PlayerActivity :
         val isLoading by viewModel.isLoading.collectAsState()
         val currentResumeState = resumeDialogState
         val noSheetOpen = sheetShown == Sheets.None && panelShown == Panels.None
-        // Only show after video loading is complete to avoid overlaying during buffering
-        if (currentResumeState != null && noSheetOpen && !isLoading) {
+        // Only show after video loading is complete to avoid overlaying during buffering.
+        // For video player only — audio player handles this specifically between art and controls.
+        if (!isAudioMedia && currentResumeState != null && noSheetOpen && !isLoading) {
           val overlayDurationSec = playerPreferences.resumeOverlayDuration.get()
           Box(
             modifier = Modifier

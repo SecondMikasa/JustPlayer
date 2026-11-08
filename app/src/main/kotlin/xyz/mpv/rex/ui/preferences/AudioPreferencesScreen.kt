@@ -22,6 +22,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
+import xyz.mpv.rex.preferences.MusicVisualizerStyle
 import xyz.mpv.rex.R
 import xyz.mpv.rex.preferences.AudioChannels
 import xyz.mpv.rex.preferences.AudioPreferences
@@ -30,6 +36,7 @@ import xyz.mpv.rex.presentation.Screen
 import xyz.mpv.rex.ui.utils.LocalBackStack
 import kotlinx.serialization.Serializable
 import me.zhanghai.compose.preference.ListPreference
+import me.zhanghai.compose.preference.Preference
 import me.zhanghai.compose.preference.ProvidePreferenceLocals
 import me.zhanghai.compose.preference.SliderPreference
 import xyz.mpv.rex.ui.preferences.components.SwitchPreference
@@ -181,6 +188,80 @@ object AudioPreferencesScreen : Screen {
               sliderValue = volumeBoostCap.toFloat(),
             )
           }
+            }
+          }
+
+          item {
+            PreferenceSectionHeader(title = stringResource(R.string.pref_visualizer_header))
+          }
+
+          item {
+            PreferenceCard {
+              val visualizerStyle by preferences.musicPlaceholderVisualizer.collectAsState()
+              ListPreference(
+                value = visualizerStyle,
+                onValueChange = { preferences.musicPlaceholderVisualizer.set(it) },
+                values = MusicVisualizerStyle.entries,
+                valueToText = { AnnotatedString(context.getString(it.title)) },
+                title = { Text(stringResource(R.string.pref_visualizer_style_title)) },
+                summary = {
+                  Text(
+                    text = context.getString(visualizerStyle.title),
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
+
+              PreferenceDivider()
+
+              val audioReactive by preferences.audioReactiveVisualizer.collectAsState()
+              val permissionLauncher = rememberLauncherForActivityResult(
+                contract = ActivityResultContracts.RequestPermission(),
+              ) { isGranted ->
+                preferences.audioReactiveVisualizer.set(isGranted)
+              }
+
+              SwitchPreference(
+                value = audioReactive,
+                onValueChange = { enabled ->
+                  if (enabled) {
+                    val hasPermission = ContextCompat.checkSelfPermission(
+                      context,
+                      Manifest.permission.RECORD_AUDIO,
+                    ) == PackageManager.PERMISSION_GRANTED
+                    if (hasPermission) {
+                      preferences.audioReactiveVisualizer.set(true)
+                    } else {
+                      permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                    }
+                  } else {
+                    preferences.audioReactiveVisualizer.set(false)
+                  }
+                },
+                title = { Text(stringResource(R.string.pref_audio_reactive_title)) },
+                summary = {
+                  Text(
+                    stringResource(R.string.pref_audio_reactive_summary),
+                    color = MaterialTheme.colorScheme.outline,
+                  )
+                },
+              )
+            }
+          }
+
+          item {
+            PreferenceSectionHeader(title = stringResource(R.string.pref_layout_audio_controls_header))
+          }
+
+          item {
+            PreferenceCard {
+              Preference(
+                title = { Text(stringResource(R.string.pref_layout_audio_bottom_controls)) },
+                summary = { Text(stringResource(R.string.pref_layout_summary)) },
+                onClick = {
+                  backstack.add(ControlLayoutEditorScreen(ControlRegion.AUDIO_BOTTOM))
+                },
+              )
             }
           }
         }

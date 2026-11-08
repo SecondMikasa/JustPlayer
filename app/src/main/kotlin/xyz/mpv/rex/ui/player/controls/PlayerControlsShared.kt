@@ -1,5 +1,6 @@
 package xyz.mpv.rex.ui.player.controls
 
+import `is`.xyz.mpv.MPVLib
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
@@ -26,6 +27,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.AspectRatio
 import androidx.compose.material.icons.filled.Audiotrack
 import androidx.compose.material.icons.filled.Bookmarks
@@ -1365,6 +1368,89 @@ fun RenderPlayerButton(
             Icon(
               imageVector = Icons.Default.Tune,
               contentDescription = stringResource(R.string.btn_label_equalizer),
+              tint = if (isActive) activeContentColor else contentColor,
+              modifier = Modifier.size(24.dp),
+            )
+          }
+        }
+      }
+    }
+
+    PlayerButton.VOLUME -> {
+      val isMuted by MPVLib.propBoolean["mute"].collectAsState()
+      val isActive = isMuted == true
+      if (isMoreSheet) {
+        Surface(
+          shape = CircleShape,
+          color = if (isActive) activeSurfaceColor else surfaceColor,
+          contentColor = if (isActive) activeContentColor else contentColor,
+          border = if (isActive) activeBorderColor else borderColor,
+          modifier =
+            Modifier
+              .height(buttonSize)
+              .clip(CircleShape)
+              .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(bounded = true),
+                onClick = {
+                  clickEvent()
+                  viewModel.toggleMute()
+                },
+                onLongClick = {
+                  clickEvent()
+                  viewModel.displayVolumeSlider()
+                },
+              ),
+        ) {
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+            modifier = Modifier.padding(horizontal = MaterialTheme.spacing.smaller),
+          ) {
+            Icon(
+              imageVector = if (isActive) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+              contentDescription = null,
+              modifier = Modifier.size(24.dp),
+            )
+            Text(
+              text = if (isActive) stringResource(R.string.btn_label_unmute) else stringResource(R.string.btn_label_mute),
+              style = MaterialTheme.typography.bodyMedium,
+              maxLines = 1,
+            )
+          }
+        }
+      } else {
+        Surface(
+          shape = CircleShape,
+          color = if (isActive) activeSurfaceColor else surfaceColor,
+          contentColor = if (isActive) activeContentColor else contentColor,
+          tonalElevation = 0.dp,
+          shadowElevation = 0.dp,
+          border = borderColor,
+          modifier =
+            Modifier
+              .size(buttonSize)
+              .clip(CircleShape)
+              .combinedClickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = ripple(bounded = true),
+                onClick = {
+                  clickEvent()
+                  viewModel.toggleMute()
+                },
+                onLongClick = {
+                  clickEvent()
+                  viewModel.displayVolumeSlider()
+                },
+              ),
+        ) {
+          Box(
+            contentAlignment = Alignment.Center,
+            modifier = Modifier.fillMaxSize(),
+          ) {
+            Icon(
+              imageVector = if (isActive) Icons.AutoMirrored.Filled.VolumeOff else Icons.AutoMirrored.Filled.VolumeUp,
+              contentDescription = stringResource(R.string.btn_label_volume),
               tint = if (isActive) activeContentColor else contentColor,
               modifier = Modifier.size(24.dp),
             )

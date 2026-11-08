@@ -42,6 +42,7 @@ import androidx.navigation3.ui.NavDisplay
 import xyz.mpv.rex.preferences.AppearancePreferences
 import xyz.mpv.rex.preferences.preference.collectAsState
 import xyz.mpv.rex.presentation.Screen
+import xyz.mpv.rex.ui.onboarding.OnboardingScreen
 import xyz.mpv.rex.repository.NetworkRepository
 import xyz.mpv.rex.utils.update.UpdateDialog
 import xyz.mpv.rex.utils.update.UpdateViewModel
@@ -120,7 +121,16 @@ class MainActivity : ComponentActivity() {
 
       MpvexTheme {
         Surface {
-          Navigator()
+          val onboardingCompleted by appearancePreferences.onboardingCompleted.collectAsState()
+          if (!onboardingCompleted) {
+            OnboardingScreen(
+              onFinished = {
+                appearancePreferences.onboardingCompleted.set(true)
+              }
+            )
+          } else {
+            Navigator()
+          }
         }
       }
     }

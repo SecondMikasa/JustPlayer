@@ -77,6 +77,7 @@ data class ControlLayoutEditorScreen(
         ControlRegion.BOTTOM_LEFT -> listOf(preferences.bottomLeftControls, preferences.topLeftControls, preferences.topRightControls, preferences.bottomRightControls)
         ControlRegion.PORTRAIT_BOTTOM -> listOf(preferences.portraitBottomControls)
         ControlRegion.MORE_SHEET -> listOf(preferences.moreSheetControls)
+        ControlRegion.AUDIO_BOTTOM -> listOf(preferences.audioBottomControls)
       }
     }
 
@@ -102,8 +103,7 @@ data class ControlLayoutEditorScreen(
             ControlRegion.TOP_RIGHT -> listOf(preferences.topLeftControls, preferences.bottomRightControls, preferences.bottomLeftControls)
             ControlRegion.BOTTOM_RIGHT -> listOf(preferences.topLeftControls, preferences.topRightControls, preferences.bottomLeftControls)
             ControlRegion.BOTTOM_LEFT -> listOf(preferences.topLeftControls, preferences.topRightControls, preferences.bottomRightControls)
-            ControlRegion.PORTRAIT_BOTTOM -> emptyList() // Portrait is independent
-            else -> emptyList()
+            ControlRegion.PORTRAIT_BOTTOM, ControlRegion.AUDIO_BOTTOM -> emptyList() // Independent
           }
           others.flatMap { it.get().split(',') }
             .filter(String::isNotBlank)
@@ -155,6 +155,7 @@ data class ControlLayoutEditorScreen(
       ControlRegion.BOTTOM_LEFT -> stringResource(R.string.control_layout_edit_title_bottom_left)
       ControlRegion.PORTRAIT_BOTTOM -> stringResource(R.string.control_layout_edit_title_portrait_bottom)
       ControlRegion.MORE_SHEET -> stringResource(R.string.control_layout_edit_title_more_sheet)
+      ControlRegion.AUDIO_BOTTOM -> stringResource(R.string.control_layout_edit_title_audio_bottom)
     }
 
     if (showResetDialog) {
@@ -281,8 +282,8 @@ data class ControlLayoutEditorScreen(
                   PlayerButtonChip(
                     button = button,
                     enabled = true,
-                    onClick = { selectedButtons = selectedButtons - button },
-                    badgeIcon = Icons.Default.RemoveCircle,
+                    onClick = if (region == ControlRegion.AUDIO_BOTTOM) null else ({ selectedButtons = selectedButtons - button }),
+                    badgeIcon = if (region == ControlRegion.AUDIO_BOTTOM) null else Icons.Default.RemoveCircle,
                     badgeColor = Color(0xFFEF5350),
                   )
                 }
@@ -290,35 +291,37 @@ data class ControlLayoutEditorScreen(
             }
           }
 
-          item(span = { GridItemSpan(maxLineSpan) }) {
-            Spacer(modifier = Modifier.height(40.dp))
-          }
+          if (region != ControlRegion.AUDIO_BOTTOM) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+              Spacer(modifier = Modifier.height(40.dp))
+            }
 
-          item(span = { GridItemSpan(maxLineSpan) }) {
-            androidx.compose.material3.Card(
-              modifier = Modifier.fillMaxWidth(),
-              shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
-              colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
-            ) {
-              FlowRow(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(10.dp),
+            item(span = { GridItemSpan(maxLineSpan) }) {
+              androidx.compose.material3.Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
+                colors = androidx.compose.material3.CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
               ) {
-                val orphanedButtons = availableButtons.filter { it !in selectedButtons }
-                orphanedButtons.forEach { button ->
-                  val isEnabled = button !in usedInOtherRegions
-                  PlayerButtonChip(
-                    button = button,
-                    enabled = isEnabled,
-                    onClick = { selectedButtons = selectedButtons + button },
-                    badgeIcon = Icons.Default.AddCircle,
-                    badgeColor = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
-                  )
-                }
-                if (orphanedButtons.isEmpty()) {
-                  Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
-                    Text(text = stringResource(R.string.control_layout_all_buttons_in_use), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FlowRow(
+                  modifier = Modifier.fillMaxWidth().padding(16.dp),
+                  horizontalArrangement = Arrangement.spacedBy(8.dp),
+                  verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                  val orphanedButtons = availableButtons.filter { it !in selectedButtons }
+                  orphanedButtons.forEach { button ->
+                    val isEnabled = button !in usedInOtherRegions
+                    PlayerButtonChip(
+                      button = button,
+                      enabled = isEnabled,
+                      onClick = { selectedButtons = selectedButtons + button },
+                      badgeIcon = Icons.Default.AddCircle,
+                      badgeColor = if (isEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f),
+                    )
+                  }
+                  if (orphanedButtons.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
+                      Text(text = stringResource(R.string.control_layout_all_buttons_in_use), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                   }
                 }
               }
@@ -326,7 +329,7 @@ data class ControlLayoutEditorScreen(
           }
 
           item(span = { GridItemSpan(maxLineSpan) }) {
-            IconsLegend()
+            IconsLegend(buttons = if (region == ControlRegion.AUDIO_BOTTOM) selectedButtons else allPlayerButtons)
             Spacer(Modifier.height(16.dp))
           }
         }
@@ -336,7 +339,7 @@ data class ControlLayoutEditorScreen(
 }
 
 @Composable
-private fun IconsLegend() {
+private fun IconsLegend(buttons: List<PlayerButton> = allPlayerButtons) {
   androidx.compose.material3.Card(
     modifier = Modifier.fillMaxWidth().padding(top = 24.dp, bottom = 8.dp),
     shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp),
@@ -345,7 +348,7 @@ private fun IconsLegend() {
     Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
       Text(text = stringResource(R.string.control_layout_icons_legend_title), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
       FlowRow(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        allPlayerButtons.forEach { button ->
+        buttons.forEach { button ->
           Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.wrapContentWidth()) {
             if (button == PlayerButton.AB_LOOP) {
               // "AB" متروك عمداً بدون ترجمة — رمز بصري وظيفي (اختصار A-B loop) مو نص لغوي

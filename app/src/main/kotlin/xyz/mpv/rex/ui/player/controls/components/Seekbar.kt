@@ -18,6 +18,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -99,6 +100,7 @@ fun SeekbarWithTimers(
   isGestureSeeking: Boolean = false,
   isCancelActive: Boolean = false,
   timerColor: Color? = null,
+  timersBelow: Boolean = false,
   modifier: Modifier = Modifier,
 ) {
   val clickEvent = LocalPlayerButtonsClickEvent.current
@@ -201,34 +203,14 @@ fun SeekbarWithTimers(
     modifier.height(48.dp)
   }
 
-  Row(
-    modifier = rowModifier,
-    verticalAlignment = Alignment.CenterVertically,
-    horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
-  ) {
-    VideoTimer(
-      value = { if (isUserInteracting) userPosition else position() },
-      timersInverted.first,
-      color = timerColor,
-      onClick = {
-        clickEvent()
-        positionTimerOnClick()
-      },
-      modifier = if (isGlassActive) Modifier.wrapContentWidth() else Modifier.width(92.dp),
-    )
-
-    // Seekbar
+  @Composable
+  fun SeekbarTrack(trackModifier: Modifier) {
     Box(
-      modifier =
-        Modifier
-          .weight(1f)
-          .height(48.dp)
-          .graphicsLayer {
-            scaleY = squeezeScale
-          },
+      modifier = trackModifier.graphicsLayer {
+        scaleY = squeezeScale
+      },
       contentAlignment = Alignment.Center,
     ) {
-
       when (seekbarStyle) {
         SeekbarStyle.Standard -> {
           StandardSeekbar(
@@ -344,20 +326,81 @@ fun SeekbarWithTimers(
             loopEnd = loopEnd,
           )
         }
-
       }
     }
+  }
 
-    VideoTimer(
-      value = { if (timersInverted.second) position() - duration else duration },
-      isInverted = timersInverted.second,
-      color = timerColor,
-      onClick = {
-        clickEvent()
-        durationTimerOnCLick()
-      },
-      modifier = if (isGlassActive) Modifier.wrapContentWidth() else Modifier.width(92.dp),
-    )
+  if (timersBelow) {
+    Column(
+      modifier = modifier.fillMaxWidth(),
+    ) {
+      SeekbarTrack(
+        trackModifier = Modifier
+          .fillMaxWidth()
+          .height(36.dp),
+      )
+      Row(
+        modifier = Modifier
+          .fillMaxWidth()
+          .padding(horizontal = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        VideoTimer(
+          value = { if (isUserInteracting) userPosition else position() },
+          isInverted = timersInverted.first,
+          color = timerColor,
+          onClick = {
+            clickEvent()
+            positionTimerOnClick()
+          },
+        )
+
+        VideoTimer(
+          value = { if (timersInverted.second) position() - duration else duration },
+          isInverted = timersInverted.second,
+          color = timerColor,
+          onClick = {
+            clickEvent()
+            durationTimerOnCLick()
+          },
+        )
+      }
+    }
+  } else {
+    Row(
+      modifier = rowModifier,
+      verticalAlignment = Alignment.CenterVertically,
+      horizontalArrangement = Arrangement.spacedBy(MaterialTheme.spacing.extraSmall),
+    ) {
+      VideoTimer(
+        value = { if (isUserInteracting) userPosition else position() },
+        isInverted = timersInverted.first,
+        color = timerColor,
+        onClick = {
+          clickEvent()
+          positionTimerOnClick()
+        },
+        modifier = (if (isGlassActive) Modifier.wrapContentWidth() else Modifier.width(92.dp)).fillMaxHeight(),
+      )
+
+      SeekbarTrack(
+        trackModifier = Modifier
+          .weight(1f)
+          .height(48.dp),
+      )
+
+      VideoTimer(
+        value = { if (timersInverted.second) position() - duration else duration },
+        isInverted = timersInverted.second,
+        color = timerColor,
+        onClick = {
+          clickEvent()
+          durationTimerOnCLick()
+        },
+        modifier = (if (isGlassActive) Modifier.wrapContentWidth() else Modifier.width(92.dp)).fillMaxHeight(),
+      )
+    }
   }
 }
 
@@ -773,7 +816,6 @@ fun VideoTimer(
   Text(
     modifier =
       modifier
-        .fillMaxHeight()
         .clickable(
           interactionSource = interactionSource,
           indication = ripple(),
@@ -781,6 +823,7 @@ fun VideoTimer(
         )
         .wrapContentHeight(Alignment.CenterVertically),
     text = timeText,
+    style = MaterialTheme.typography.labelMedium,
     color = color ?: defaultColor,
     textAlign = TextAlign.Center,
   )

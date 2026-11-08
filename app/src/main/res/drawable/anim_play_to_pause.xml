@@ -29,7 +29,7 @@
                 android:valueType="pathType"
                 android:interpolator="@android:interpolator/fast_out_slow_in"/>
         </aapt:attr>
-    </target>
+    </target>   
     <target android:name="group">
         <aapt:attr name="android:animation">
             <objectAnimator

@@ -3,6 +3,7 @@ package xyz.mpv.rex.preferences
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowBack
 import androidx.compose.material.icons.automirrored.outlined.Segment
+import androidx.compose.material.icons.automirrored.outlined.VolumeUp
 import androidx.compose.material.icons.outlined.AspectRatio
 import androidx.compose.material.icons.outlined.Audiotrack
 import androidx.compose.material.icons.outlined.Bookmarks
@@ -63,6 +64,7 @@ enum class PlayerButton(
   AMBIENT_MODE(Icons.Outlined.BlurOn),
   SLEEP_TIMER(Icons.Outlined.Timer),
   EQUALIZER(Icons.Outlined.Tune),
+  VOLUME(Icons.AutoMirrored.Outlined.VolumeUp),
   NONE(Icons.Outlined.Bookmarks),
 }
 
@@ -109,5 +111,6 @@ fun getPlayerButtonLabel(button: PlayerButton): String =
     PlayerButton.AMBIENT_MODE -> stringResource(R.string.btn_label_ambient_mode)
     PlayerButton.SLEEP_TIMER -> stringResource(R.string.btn_label_sleep_timer)
     PlayerButton.EQUALIZER -> stringResource(R.string.btn_label_equalizer)
+    PlayerButton.VOLUME -> stringResource(R.string.btn_label_volume)
     PlayerButton.NONE -> stringResource(R.string.btn_label_none)
   }

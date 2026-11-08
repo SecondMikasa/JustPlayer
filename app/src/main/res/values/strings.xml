@@ -1005,7 +1005,19 @@
     <string name="btn_label_ambient_mode">Ambience Mode</string>
     <string name="btn_label_sleep_timer">Sleep Timer</string>
     <string name="btn_label_equalizer">Equalizer</string>
+    <string name="btn_label_volume">Volume</string>
+    <string name="btn_label_mute">Mute</string>
+    <string name="btn_label_unmute">Unmute</string>
     <string name="btn_label_none">None</string>
+
+    <string name="pref_visualizer_header">Music Visualizer</string>
+    <string name="pref_visualizer_style_title">Artwork Visualizer Style</string>
+    <string name="pref_visualizer_style_fluid_blob">Fluid Aura</string>
+    <string name="pref_visualizer_style_pulse_rings">Cosmic Ripple</string>
+    <string name="pref_visualizer_style_nebula_glow">Chromatic Nebula</string>
+    <string name="pref_visualizer_style_wireframe_sphere">Retro Wireframe</string>
+    <string name="pref_audio_reactive_title">Audio-Reactive Visualizer</string>
+    <string name="pref_audio_reactive_summary">Make visualizers pulse and react to music in real-time using microphone audio input</string>
 
 
     <string name="timer_start">Start Timer</string>
@@ -1080,6 +1092,8 @@
     <string name="pref_layout_portrait_controls_header">Portrait Controls</string>
     <string name="pref_layout_more_sheet_controls_header">More Sheet Controls</string>
     <string name="pref_layout_more_sheet_controls_title">Buttons in Controls Tab</string>
+    <string name="pref_layout_audio_controls_header">Music Player Controls</string>
+    <string name="pref_layout_audio_bottom_controls">Bottom Bar Controls</string>
     <string name="pref_seekbar_style_header">Seekbar Style</string>
     <string name="pref_controls_layout_header">Controls Layout</string>
     <string name="pref_player_appearance_header">Appearance</string>
@@ -1127,6 +1141,7 @@
     <string name="control_layout_edit_title_bottom_left">Edit Bottom Left</string>
     <string name="control_layout_edit_title_portrait_bottom">Edit Portrait Bottom</string>
     <string name="control_layout_edit_title_more_sheet">Edit More Sheet Buttons</string>
+    <string name="control_layout_edit_title_audio_bottom">Edit Music Player Bottom Controls</string>
     <string name="control_layout_back">Back</string>
     <string name="control_layout_reset_to_default">Reset to default</string>
     <string name="control_layout_reset_dialog_title">Reset Layout</string>

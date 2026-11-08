@@ -33,6 +33,9 @@ class AppearancePreferences(
   val enableBounceAnimation = preferenceStore.getBoolean("enable_bounce_animation", false)
   val showCommunityIcon = preferenceStore.getBoolean("show_community_icon", true)
 
+  /** Whether the first-launch permission onboarding has been completed */
+  val onboardingCompleted = preferenceStore.getBoolean("onboarding_completed", false)
+
   val showHiddenFiles = preferenceStore.getBoolean("show_hidden_files", false)
   val showUnplayedOldVideoLabel = preferenceStore.getBoolean("show_unplayed_old_video_label", true)
   val unplayedOldVideoDays = preferenceStore.getInt("unplayed_old_video_days", 7)
@@ -81,6 +84,12 @@ class AppearancePreferences(
     preferenceStore.getString(
       "more_sheet_controls",
       "SCREEN_ROTATION,DECODER,AUDIO_TRACK,SUBTITLES,PLAYBACK_SPEED,REPEAT_MODE,SHUFFLE,VIDEO_ZOOM,FRAME_NAVIGATION,ASPECT_RATIO,PICTURE_IN_PICTURE,LOCK_CONTROLS,SLEEP_TIMER",
+    )
+
+  val audioBottomControls =
+    preferenceStore.getString(
+      "audio_bottom_controls",
+      "EQUALIZER,SHUFFLE,REPEAT_MODE,SLEEP_TIMER,VOLUME",
     )
 
   fun parseButtons(
