@@ -2089,9 +2089,12 @@ class PlayerActivity :
       }
     }
 
-    // Only set orientation if NOT in Video or Smart mode, or if orientation has not been determined yet
+    // Only set orientation if NOT in Video or Smart mode, or if orientation has not been determined yet.
+    // For audio-only files, always call setOrientation() so the device can rotate freely.
     val orientation = playerPreferences.orientation.get()
     if (orientation != PlayerOrientation.Video && orientation != PlayerOrientation.Smart) {
+      setOrientation()
+    } else if (viewModel.isAudioMedia.value) {
       setOrientation()
     } else if (requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
       applyInitialOrientationFromIntent(intent)
@@ -2919,9 +2922,9 @@ class PlayerActivity :
             val aspect = runCatching { player.getVideoOutAspect() }.getOrNull()
             Log.d(TAG, "setOrientation - ${if (isSmartMode) "Smart (fallback)" else "Video"} mode: aspect=$aspect")
             if (aspect == null || aspect <= 0.0) {
-              // Aspect not available yet or audio-only file - do not force orientation change
-              Log.d(TAG, "setOrientation - Aspect not available or audio-only file")
-              ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+              // Audio-only file: allow sensor-based free rotation
+              Log.d(TAG, "setOrientation - Audio-only file, allowing free rotation")
+              ActivityInfo.SCREEN_ORIENTATION_SENSOR
             } else {
               // Aspect available - set correct orientation now
               val orientation = if (aspect > 1.0) {

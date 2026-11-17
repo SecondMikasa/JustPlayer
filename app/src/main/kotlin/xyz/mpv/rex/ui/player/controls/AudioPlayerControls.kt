@@ -98,10 +98,19 @@ import androidx.core.content.ContextCompat
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.StrokeCap
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import xyz.mpv.rex.preferences.MusicVisualizerStyle
 import xyz.mpv.rex.utils.media.AudioAmplitudeTracker
+import xyz.mpv.rex.utils.media.AudioAnalyzer
+import xyz.mpv.rex.utils.media.BandState
+import xyz.mpv.rex.utils.media.SPECTRUM_BINS
+import xyz.mpv.rex.utils.media.SPECTROGRAM_COLS
+import xyz.mpv.rex.utils.media.rememberBandState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -121,7 +130,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Color
@@ -130,6 +141,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.graphicsLayer
@@ -182,7 +194,12 @@ import xyz.mpv.rex.ui.theme.spacing
 import java.util.Locale
 import kotlin.math.PI
 import kotlin.math.cos
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Now Playing screen for audio-only media.
@@ -218,6 +235,9 @@ fun AudioPlayerControls(
 
   // ── Playback state ───────────────────────────────────────────────────────
   val paused       by MPVLib.propBoolean["pause"].collectAsState()
+  val mpvVolume    by MPVLib.propInt["volume"].collectAsState()
+  val mpvMute      by MPVLib.propBoolean["mute"].collectAsState()
+  val isSilent     = (mpvVolume ?: 100) <= 0 || mpvMute == true
   val duration     by MPVLib.propInt["duration"].collectAsState()
   val position     by MPVLib.propInt["time-pos"].collectAsState()
   val playbackSpeed by MPVLib.propFloat["speed"].collectAsState()
@@ -278,42 +298,77 @@ fun AudioPlayerControls(
   val visualizerStyle  by audioPrefs.musicPlaceholderVisualizer.collectAsState()
   val audioReactive    by audioPrefs.audioReactiveVisualizer.collectAsState()
   val context = LocalContext.current
-  val hasMicPermission = remember(context) {
-    ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+  var hasMicPermission by remember {
+    mutableStateOf(
+      ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+    )
+  }
+  // If the user already has mic permission granted but the reactive visualizer preference hasn't
+  // been explicitly set yet, turn it on by default. If the user denies or revokes mic permission,
+  // ensure reactive mode stays off.
+  LaunchedEffect(hasMicPermission) {
+    if (hasMicPermission && !audioPrefs.audioReactiveVisualizer.isSet()) {
+      audioPrefs.audioReactiveVisualizer.set(true)
+    } else if (!hasMicPermission && audioReactive) {
+      audioPrefs.audioReactiveVisualizer.set(false)
+    }
   }
 
-  var audioEnergy by remember { mutableFloatStateOf(0f) }
-  var smoothedEnergy by remember { mutableFloatStateOf(0f) }
-  LaunchedEffect(paused, audioReactive, hasMicPermission) {
-    if (paused == true || !audioReactive || !hasMicPermission) {
-      audioEnergy = 0f
-      smoothedEnergy = 0f
+  // Re-check on resume so granting or revoking permission from system settings takes effect
+  // without leaving the screen.
+  DisposableEffect(activity) {
+    val observer = LifecycleEventObserver { _, event ->
+      if (event == Lifecycle.Event.ON_RESUME) {
+        val granted =
+          ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        hasMicPermission = granted
+        if (granted && !audioPrefs.audioReactiveVisualizer.isSet()) {
+          audioPrefs.audioReactiveVisualizer.set(true)
+        } else if (!granted && audioReactive) {
+          audioPrefs.audioReactiveVisualizer.set(false)
+        }
+      }
+    }
+    activity.lifecycle.addObserver(observer)
+    onDispose { activity.lifecycle.removeObserver(observer) }
+  }
+
+  // Single frame-clock loop that turns raw analysis into bass / mid / treble / beat / spectrum.
+  val bandState = rememberBandState(paused = paused == true, silent = isSilent)
+
+  // Audio source selection. Preferred: Visualizer on the output mix (real FFT of the playing
+  // audio, low latency, no room noise). Fallback: microphone amplitude. If neither is
+  // available the visualizers fall back to their synthetic idle animation.
+  LaunchedEffect(paused, audioReactive, hasMicPermission, isSilent) {
+    if (paused == true || !audioReactive || !hasMicPermission || isSilent) {
+      AudioAnalyzer.stopAll()
       return@LaunchedEffect
     }
-    val trackerJob = launch { AudioAmplitudeTracker.startListening() }
+    var trackerJob: Job? = null
     try {
-      while (isActive) {
-        val raw = AudioAmplitudeTracker.currentAmplitude
-        // Apply exponential scaling for more dramatic response
-        // Low values (0.1-0.3) get boosted, high values stay punchy
-        audioEnergy = if (raw > 0f) {
-          val boosted = raw * raw * 0.6f + raw * 0.5f // Quadratic + linear for better dynamics
-          boosted.coerceIn(0f, 1.2f) // Allow slight overdrive for impact
-        } else 0f
-        // Extra smoothing layer for fluid visual response
-        smoothedEnergy = smoothedEnergy * 0.7f + audioEnergy * 0.3f
-        delay(33)
+      var useMic = !AudioAnalyzer.startVisualizer()
+      if (!useMic) {
+        // Some devices/OS versions accept the Visualizer but deliver only silence.
+        delay(1200L)
+        if (!AudioAnalyzer.visualizerSignalSeen) {
+          AudioAnalyzer.stopVisualizer()
+          useMic = true
+        }
       }
+      if (useMic) {
+        AudioAnalyzer.setMicActive()
+        trackerJob = launch { AudioAmplitudeTracker.startListening() }
+      }
+      awaitCancellation()
     } finally {
-      trackerJob.cancel()
-      audioEnergy = 0f
-      smoothedEnergy = 0f
+      trackerJob?.cancel()
+      AudioAnalyzer.stopAll()
     }
   }
 
   // ── Visualizer Toggle State ───────────────────────────────────────────────
   var showVisualizerOverArt by remember { mutableStateOf(false) }
-  val displayVisualizer = showVisualizerOverArt || currentArtwork == null || currentArtwork.isRecycled
+  val displayVisualizer = showVisualizerOverArt
 
   // ── Cover Art Animation ──────────────────────────────────────────────────
   val isPaused = paused == true
@@ -325,8 +380,35 @@ fun AudioPlayerControls(
     ),
     label = "artScale",
   )
+
+  val configuration = LocalConfiguration.current
+  val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+  val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+
+  // Visualizers that require a rectangular card container to avoid clipping:
+  // - Mirrored EQ Bars (horizontal linear spectrum)
+  // - Spectrogram Scroll (rectangular time x frequency waterfall)
+  // All other styles (Radial Spectrum, Oscilloscope Ring) and cover art (with or without art)
+  // use a circular container.
+  val isRectangularVisualizer = displayVisualizer && (
+    visualizerStyle == MusicVisualizerStyle.MIRRORED_EQ_BARS ||
+    visualizerStyle == MusicVisualizerStyle.SPECTROGRAM_SCROLL
+  )
+
+  val circleCornerRadius = if (isLandscape) {
+    (configuration.screenHeightDp.dp * 0.85f) / 2f
+  } else {
+    (configuration.screenWidthDp.dp * 0.92f) / 2f
+  }
+
+  val targetCornerRadius = if (isRectangularVisualizer) {
+    if (isPaused) 22.dp else 28.dp
+  } else {
+    circleCornerRadius
+  }
+
   val artCornerRadius by animateDpAsState(
-    targetValue = if (isPaused) 22.dp else 28.dp,
+    targetValue = targetCornerRadius,
     animationSpec = spring(
       dampingRatio = Spring.DampingRatioNoBouncy,
       stiffness = Spring.StiffnessMediumLow,
@@ -604,10 +686,6 @@ fun AudioPlayerControls(
       )
     }
 
-    val configuration = LocalConfiguration.current
-    val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
-    val isPortrait = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
-
     if (isLandscape) {
       Row(
         modifier = Modifier
@@ -633,24 +711,20 @@ fun AudioPlayerControls(
                 scaleX = artScale
                 scaleY = artScale
                 this.shadowElevation = artElevation.toPx()
-                this.shape = if (!displayVisualizer && currentArtwork != null) RoundedCornerShape(artCornerRadius) else CircleShape
+                this.shape = RoundedCornerShape(artCornerRadius)
                 this.clip = true
               }
-              .clip(if (!displayVisualizer && currentArtwork != null) RoundedCornerShape(artCornerRadius) else CircleShape),
+              .clip(RoundedCornerShape(artCornerRadius)),
           ) {
             Box(
               modifier = Modifier
                 .fillMaxSize()
-                .then(
-                  if (currentArtwork != null && !currentArtwork.isRecycled) {
-                    Modifier.combinedClickable(
-                      onClick = {},
-                      onLongClick = {
-                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                        showVisualizerOverArt = !showVisualizerOverArt
-                      },
-                    )
-                  } else Modifier
+                .combinedClickable(
+                  onClick = {},
+                  onLongClick = {
+                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                    showVisualizerOverArt = !showVisualizerOverArt
+                  },
                 ),
             ) {
               if (displayVisualizer) {
@@ -658,12 +732,12 @@ fun AudioPlayerControls(
                   AnimatedMusicBlob(
                     paused = paused == true,
                     style = visualizerStyle,
-                    audioEnergy = smoothedEnergy,
+                    bands = bandState,
                     modifier = Modifier.fillMaxSize(),
                   )
                 }
-              } else if (currentArtwork != null) {
-                AudioCoverArt(currentArtwork, style = visualizerStyle, audioEnergy = smoothedEnergy)
+              } else {
+                AudioCoverArt(currentArtwork)
               }
             }
           }
@@ -1005,26 +1079,23 @@ fun AudioPlayerControls(
               scaleX = artScale
               scaleY = artScale
               this.shadowElevation = artElevation.toPx()
-              this.shape = if (!displayVisualizer && currentArtwork != null) RoundedCornerShape(artCornerRadius) else CircleShape
+              this.shape = RoundedCornerShape(artCornerRadius)
               this.clip = true
-            },
-          shape = if (!displayVisualizer && currentArtwork != null) RoundedCornerShape(artCornerRadius) else CircleShape,
+            }
+            .clip(RoundedCornerShape(artCornerRadius)),
+          shape = RoundedCornerShape(artCornerRadius),
           shadowElevation = artElevation,
           color = Color.Transparent,
         ) {
           Box(
             modifier = Modifier
               .fillMaxSize()
-              .then(
-                if (currentArtwork != null && !currentArtwork.isRecycled) {
-                  Modifier.combinedClickable(
-                    onClick = {},
-                    onLongClick = {
-                      haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                      showVisualizerOverArt = !showVisualizerOverArt
-                    },
-                  )
-                } else Modifier
+              .combinedClickable(
+                onClick = {},
+                onLongClick = {
+                  haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                  showVisualizerOverArt = !showVisualizerOverArt
+                },
               ),
           ) {
             if (displayVisualizer) {
@@ -1032,12 +1103,12 @@ fun AudioPlayerControls(
                 AnimatedMusicBlob(
                   paused = paused == true,
                   style = visualizerStyle,
-                  audioEnergy = smoothedEnergy,
+                  bands = bandState,
                   modifier = Modifier.fillMaxSize(),
                 )
               }
-            } else if (currentArtwork != null) {
-              AudioCoverArt(currentArtwork, style = visualizerStyle, audioEnergy = smoothedEnergy)
+            } else {
+              AudioCoverArt(currentArtwork)
             }
           }
         }
@@ -1534,429 +1605,591 @@ fun AudioPlayerControls(
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Animated Music Blob  — dynamic, mesmerizing fluid visualizer for missing art
+// Animated Music Visualizer  — band-reactive visualizers for missing art
 // ─────────────────────────────────────────────────────────────────────────────
 
+private const val VIZ_POINTS = 180
+private const val MAX_RADIUS_FRAC = 0.84f
+
+/** Overall pulse scale: idle sine (shrinks when real audio drives it) + bass + beat kick. */
+private fun blobPulse(bands: BandState, pausedScale: Float): Float {
+  val idleAmp = (0.08f - 0.05f * bands.audioMix) * (1f - bands.audioMix)
+  val raw = pausedScale * (1f + sin(bands.time * 2.4f) * idleAmp) +
+    bands.bass * 0.28f + bands.beat * 0.16f
+  return raw.coerceAtMost(1.0f)
+}
+
+private fun lerpColor(c1: Color, c2: Color, fraction: Float): Color {
+  val f = fraction.coerceIn(0f, 1f)
+  return Color(
+    red = c1.red + (c2.red - c1.red) * f,
+    green = c1.green + (c2.green - c1.green) * f,
+    blue = c1.blue + (c2.blue - c1.blue) * f,
+    alpha = c1.alpha + (c2.alpha - c1.alpha) * f,
+  )
+}
+
 /**
- * Dynamic, mesmerizing animated fluid blob placeholder when no album art is available.
- * Creates an organic, multi-layered liquid aura with Material 3 dynamic colors
- * that smoothly pulses and morphs in real-time, pausing gracefully with the music.
+ * Blends a bar's base token color toward [onSurface].copy(0.6f) during quiet passages.
+ * At [overall] == 1f (loud) the blend is 0 and the base color is returned unchanged.
+ * At [overall] == 0f (silent) the blend is 0.25f, nudging the bar toward the surface foreground.
  */
-// ─────────────────────────────────────────────────────────────────────────────
-// Animated Music Visualizer  — dynamic, continuous visualizers for missing art
-// ─────────────────────────────────────────────────────────────────────────────
+private fun themedBarColor(base: Color, onSurface: Color, overall: Float): Color {
+  val blend = (1f - overall) * 0.25f
+  return Color(
+    red   = base.red   + (onSurface.copy(alpha = 0.6f).red   - base.red)   * blend,
+    green = base.green + (onSurface.copy(alpha = 0.6f).green - base.green) * blend,
+    blue  = base.blue  + (onSurface.copy(alpha = 0.6f).blue  - base.blue)  * blend,
+    alpha = base.alpha,
+  )
+}
 
 /**
- * Dynamic, mesmerizing music visualizer when no album art is available.
- * Supports multiple aesthetic styles (Fluid Aura, Cosmic Ripple, Chromatic Nebula, Retro Wireframe).
- * Uses a monotonic continuous time frame loop to guarantee 100% continuous, uninterrupted motion
- * without any cuts, snaps or seams.
- * Seamlessly reacts to music energy when microphone audio input is enabled.
+ * Modern Material 3 music visualizers:
+ * 1. Radial spectrum: bars arranged in a circle around center core, peak-hold caps, pulsing core.
+ * 2. Mirrored equalizer bars: classic bottom-up spectrum with falling peak dots.
+ * 3. Oscilloscope ring: glowing ring following actual audio waveform.
+ * 4. Scrolling history: spectrogram ribbon showing drops and builds over time.
  */
 @Composable
 fun AnimatedMusicBlob(
   paused: Boolean,
+  bands: BandState,
   modifier: Modifier = Modifier,
-  style: MusicVisualizerStyle = MusicVisualizerStyle.FLUID_BLOB,
-  audioEnergy: Float = 0f,
+  style: MusicVisualizerStyle = MusicVisualizerStyle.RADIAL_SPECTRUM,
 ) {
   val primaryColor = MaterialTheme.colorScheme.primary
   val tertiaryColor = MaterialTheme.colorScheme.tertiary
   val secondaryColor = MaterialTheme.colorScheme.secondary
   val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
+  val surface = MaterialTheme.colorScheme.surface
   val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
+  val onSurface = MaterialTheme.colorScheme.onSurface
 
-  // Monotonic frame time accumulator: eliminates all modulo wraps & cuts completely
-  var continuousTime by remember { mutableFloatStateOf(0f) }
-  LaunchedEffect(paused) {
-    if (paused) return@LaunchedEffect
-    var lastNanos = 0L
-    while (isActive) {
-      withFrameNanos { nanos ->
-        if (lastNanos != 0L) {
-          val dt = (nanos - lastNanos) / 1_000_000_000f
-          // Smooth increment, clamped against background sleep jumps
-          continuousTime += dt.coerceIn(0f, 0.1f)
-        }
-        lastNanos = nanos
-      }
-    }
-  }
+  val pausedScale by animateFloatAsState(
+    targetValue = if (paused) 0.95f else 1f,
+    animationSpec = spring(
+      dampingRatio = Spring.DampingRatioNoBouncy,
+      stiffness = Spring.StiffnessMediumLow,
+    ),
+    label = "vizPausedScale",
+  )
 
-  // Smooth synthetic pulse + reactive audio boost
-  val syntheticPulse = if (!paused) {
-    1f + sin(continuousTime * 2.2f) * 0.045f
-  } else {
-    0.95f
-  }
-  val reactiveBoost = if (audioEnergy > 0f) audioEnergy * 0.32f else 0f
-  val currentPulse = syntheticPulse + reactiveBoost
-  val waveExcitation = 1f + (if (audioEnergy > 0f) audioEnergy * 0.9f else 0f)
+  // Persistent visualizer states across frames (draw phase)
+  val radialPeaks = remember { FloatArray(64) }
+  val radialPeakVels = remember { FloatArray(64) }
 
-  val outerPath = remember { Path() }
-  val innerPath = remember { Path() }
+  val eqPeaks = remember { FloatArray(36) }
+  val eqPeakVels = remember { FloatArray(36) }
+
+  val oscPath = remember { Path() }
 
   Box(
     modifier = modifier
       .background(
         Brush.radialGradient(
           colors = listOf(
-            surfaceVariant.copy(alpha = 0.55f),
-            MaterialTheme.colorScheme.surface.copy(alpha = 0.85f),
-            Color.Transparent,
+            primaryColor.copy(alpha = 0.12f + bands.bass * 0.08f),
+            surface.copy(alpha = 0.95f),
           )
         )
       ),
     contentAlignment = Alignment.Center,
   ) {
     Canvas(modifier = Modifier.fillMaxSize()) {
+      // Subscribe to per-frame updates (draw-phase only, no recomposition).
+      if (bands.tick < 0L) return@Canvas
+
+      val dt = bands.lastDt.coerceIn(0.001f, 0.05f)
+
+      val bass = bands.bass
+      val mid = bands.mid
+      val treble = bands.treble
+      val overall = bands.overall
+      val beat = bands.beat
+      val spectrum = bands.spectrum
+
       val cx = size.width / 2f
       val cy = size.height / 2f
       val minDimension = minOf(size.width, size.height)
-      val baseRadius = minDimension * 0.36f * currentPulse
 
       when (style) {
-        MusicVisualizerStyle.FLUID_BLOB -> {
-          // ── 1. Fluid Aura (Organic Liquid Amoeba) - Enhanced Audio Reactivity ──
-          val glowRadius = baseRadius * (1.5f + (if (audioEnergy > 0f) audioEnergy * 0.8f else 0f))
+        MusicVisualizerStyle.RADIAL_SPECTRUM -> {
+          // ── 1. Radial Spectrum: Circular bars radiating outward all around, bass=bright,
+          //    treble=dim, bars go from coreRadius outward, peak-hold caps. ──
+          val alphaMix = 0.55f + 0.45f * bands.audioMix
+          val corePulse = blobPulse(bands, pausedScale)
+          val coreRadiusRaw = minDimension * 0.26f * corePulse
+          val coreRadius = coreRadiusRaw.coerceAtMost((minDimension / 2f) * 0.50f)
+          val numBars = 64
+          val barGap = 4.dp.toPx()
+          val minBarLen = 5.dp.toPx()
+          val startDist = coreRadius + barGap
+          val maxReach = minDimension * 0.40f
+          val maxBarLen = (maxReach - startDist).coerceAtLeast(minDimension * 0.16f)
+          val barWidth = 3.6.dp.toPx()
+          val angleStep = (2f * PI.toFloat()) / numBars
+          val halfBars = numBars / 2
+
+          // Core ambient glow
           drawCircle(
             brush = Brush.radialGradient(
               colors = listOf(
-                primaryColor.copy(alpha = 0.38f + (audioEnergy * 0.4f)),
-                tertiaryColor.copy(alpha = 0.18f + (audioEnergy * 0.15f)),
+                primaryColor.copy(alpha = (0.40f + bass * 0.35f + beat * 0.20f).coerceAtMost(1f) * alphaMix),
+                tertiaryColor.copy(alpha = (0.20f + mid * 0.20f).coerceAtMost(1f) * alphaMix),
                 Color.Transparent,
               ),
               center = Offset(cx, cy),
-              radius = glowRadius,
+              radius = coreRadius * 1.55f,
             ),
-            radius = glowRadius,
+            radius = coreRadius * 1.55f,
             center = Offset(cx, cy),
           )
 
-          fun buildBlobPath(
-            path: Path,
-            radius: Float,
-            speed1: Float,
-            speed2: Float,
-            harmonic1: Float,
-            harmonic2: Float,
-            harmonic3: Float,
-            rotSpeed: Float,
-          ) {
-            path.reset()
-            val numPoints = 64
-            val step = (2f * PI.toFloat()) / numPoints
-            val points = ArrayList<Offset>(numPoints)
-            val p1 = continuousTime * speed1
-            val p2 = continuousTime * speed2
-            val rot = continuousTime * rotSpeed
+          // Inner solid pulsing core
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(
+                primaryColor.copy(alpha = (0.92f + overall * 0.08f).coerceAtMost(1f) * alphaMix),
+                tertiaryColor.copy(alpha = (0.82f + overall * 0.15f).coerceAtMost(1f) * alphaMix),
+              ),
+              center = Offset(cx - coreRadius * 0.15f, cy - coreRadius * 0.15f),
+              radius = coreRadius * 1.35f,
+            ),
+            radius = coreRadius,
+            center = Offset(cx, cy),
+          )
 
-            for (i in 0 until numPoints) {
-              val theta = i * step + rot
-              val rOffset = (
-                sin(3f * theta + p1) * harmonic1 +
-                cos(4f * theta - p2) * harmonic2 +
-                sin(2f * theta + p1 * 0.5f) * harmonic3
-              ) * radius * waveExcitation
-              val r = radius + rOffset
-              points.add(Offset(cx + r * cos(theta), cy + r * sin(theta)))
+          // Core accent ring
+          drawCircle(
+            color = onPrimaryColor.copy(alpha = (0.25f + beat * 0.25f) * alphaMix),
+            radius = coreRadius * 0.76f,
+            center = Offset(cx, cy),
+            style = Stroke(width = 1.8.dp.toPx()),
+          )
+
+          for (bar in 0 until numBars) {
+            val mirrorIdx = if (bar < halfBars) bar else (numBars - 1 - bar)
+            val binFrac = (mirrorIdx.toFloat() / (halfBars - 1f)) * (SPECTRUM_BINS - 1)
+            val binLow = binFrac.toInt().coerceIn(0, SPECTRUM_BINS - 1)
+            val binHigh = (binLow + 1).coerceIn(0, SPECTRUM_BINS - 1)
+            val f = binFrac - binLow
+            val rawMag = spectrum[binLow] * (1f - f) + spectrum[binHigh] * f
+
+            // Non-linear perceptual scaling so bars extend visibly even on subtle passages
+            val dynamicMag = (rawMag.pow(0.80f) * 1.12f).coerceIn(0f, 1f)
+            val barLen = minBarLen + dynamicMag * (maxBarLen - minBarLen)
+
+            // Peak-hold with smooth gravity-based fall
+            if (barLen >= radialPeaks[bar]) {
+              radialPeaks[bar] = barLen
+              radialPeakVels[bar] = 0f
+            } else {
+              radialPeakVels[bar] += 200.dp.toPx() * dt
+              // Cap so a single frame cannot overshoot below the floor
+              val maxVel = (radialPeaks[bar] - minBarLen) / dt
+              radialPeakVels[bar] = radialPeakVels[bar].coerceAtMost(maxVel.coerceAtLeast(0f))
+              radialPeaks[bar] = (radialPeaks[bar] - radialPeakVels[bar] * dt).coerceAtLeast(minBarLen)
             }
 
-            if (points.isNotEmpty()) {
-              val first = points[0]
-              val last = points.last()
-              val startMid = Offset((first.x + last.x) / 2f, (first.y + last.y) / 2f)
-              path.moveTo(startMid.x, startMid.y)
+            // Angle: bar 0 = top (−π/2), going clockwise
+            val angle = -PI.toFloat() / 2f + bar * angleStep
+            val cosA = cos(angle)
+            val sinA = sin(angle)
+            val halfCapWidth = barWidth / 2f
+            val maxEndDist = (minDimension / 2f) * MAX_RADIUS_FRAC - halfCapWidth
+            val endDist = (startDist + barLen).coerceAtMost(maxEndDist)
+            val peakDist = (startDist + radialPeaks[bar] + 3.dp.toPx()).coerceAtMost(maxEndDist)
 
-              for (i in 0 until numPoints) {
-                val curr = points[i]
-                val next = points[(i + 1) % numPoints]
-                val mid = Offset((curr.x + next.x) / 2f, (curr.y + next.y) / 2f)
-                path.quadraticTo(curr.x, curr.y, mid.x, mid.y)
-              }
-              path.close()
+            val fraction = mirrorIdx.toFloat() / (halfBars - 1f)
+            val baseBarColor = if (fraction < 0.5f) {
+              lerpColor(primaryColor, secondaryColor, fraction * 2f)
+            } else {
+              lerpColor(secondaryColor, tertiaryColor, (fraction - 0.5f) * 2f)
+            }
+            val barColor = themedBarColor(baseBarColor, onSurface, overall)
+
+            // Spectrum bar line
+            drawLine(
+              color = barColor.copy(alpha = (0.82f + dynamicMag * 0.18f) * alphaMix),
+              start = Offset(cx + cosA * startDist, cy + sinA * startDist),
+              end   = Offset(cx + cosA * endDist,   cy + sinA * endDist),
+              strokeWidth = barWidth,
+              cap = StrokeCap.Round,
+            )
+
+            // Peak-hold cap dot
+            if (radialPeaks[bar] > minBarLen + 2.dp.toPx()) {
+              drawCircle(
+                color = barColor.copy(alpha = 0.95f * alphaMix),
+                radius = barWidth * 0.55f,
+                center = Offset(cx + cosA * peakDist, cy + sinA * peakDist),
+              )
             }
           }
+        }
 
-          // Outer Translucent Liquid Fringe - boosted reactivity
-          buildBlobPath(
-            path = outerPath,
-            radius = baseRadius * (1.08f + audioEnergy * 0.15f),
-            speed1 = 1.2f + audioEnergy * 0.8f,
-            speed2 = 0.8f + audioEnergy * 0.6f,
-            harmonic1 = 0.15f + audioEnergy * 0.1f,
-            harmonic2 = 0.12f + audioEnergy * 0.08f,
-            harmonic3 = 0.09f + audioEnergy * 0.06f,
-            rotSpeed = -0.18f - audioEnergy * 0.3f,
-          )
-          drawPath(
-            path = outerPath,
-            brush = Brush.sweepGradient(
-              colors = listOf(
-                tertiaryColor.copy(alpha = 0.45f + audioEnergy * 0.15f),
-                secondaryColor.copy(alpha = 0.35f + audioEnergy * 0.1f),
-                primaryColor.copy(alpha = 0.40f + audioEnergy * 0.12f),
-                tertiaryColor.copy(alpha = 0.45f + audioEnergy * 0.15f),
-              ),
-              center = Offset(cx, cy),
-            ),
-          )
+        MusicVisualizerStyle.MIRRORED_EQ_BARS -> {
+          // ── 2. Mirrored Equalizer Bars: Classic left-right symmetric spectrum, centered vertically.
+          //    Bars grow upward from a centered baseline; reflection fades downward. ──
+          val alphaMix = 0.55f + 0.45f * bands.audioMix
+          val numBars = 36
+          val totalWidth = minDimension * 0.82f
+          val barW = (totalWidth / numBars) * 0.65f
+          val gapW = (totalWidth / numBars) * 0.35f
+          val startX = cx - totalWidth / 2f
+          // Baseline sits slightly below center so bars have room to grow up
+          val baselineY = cy + minDimension * 0.08f
+          val maxBarHeight = minDimension * 0.38f
+          val minBarHeight = 5.dp.toPx()
 
-          // Inner Vibrant Liquid Core - enhanced colors with audio
-          buildBlobPath(
-            path = innerPath,
-            radius = baseRadius + audioEnergy * 0.2f,
-            speed1 = 0.75f + audioEnergy * 0.6f,
-            speed2 = 1.1f + audioEnergy * 0.7f,
-            harmonic1 = 0.13f + audioEnergy * 0.12f,
-            harmonic2 = 0.10f + audioEnergy * 0.1f,
-            harmonic3 = 0.08f + audioEnergy * 0.08f,
-            rotSpeed = 0.22f + audioEnergy * 0.4f,
-          )
-          drawPath(
-            path = innerPath,
-            brush = Brush.radialGradient(
-              colors = listOf(
-                primaryColor.copy(alpha = 0.92f + audioEnergy * 0.08f),
-                tertiaryColor.copy(alpha = 0.82f + audioEnergy * 0.1f),
-                secondaryColor.copy(alpha = 0.72f + audioEnergy * 0.15f),
-              ),
-              center = Offset(cx - baseRadius * 0.2f, cy - baseRadius * 0.25f),
-              radius = baseRadius * (1.3f + audioEnergy * 0.3f),
-            ),
-          )
-
-          // Specular glint - pulses with audio
+          // Ambient bloom behind the equalizer bars
           drawCircle(
             brush = Brush.radialGradient(
               colors = listOf(
-                Color.White.copy(alpha = 0.42f + audioEnergy * 0.25f),
-                Color.White.copy(alpha = 0.08f + audioEnergy * 0.1f),
+                primaryColor.copy(alpha = (0.28f + bass * 0.30f + beat * 0.15f).coerceAtMost(0.70f) * alphaMix),
+                tertiaryColor.copy(alpha = (0.12f + mid * 0.15f).coerceAtMost(0.40f) * alphaMix),
                 Color.Transparent,
               ),
-              center = Offset(cx - baseRadius * 0.28f, cy - baseRadius * 0.32f),
-              radius = baseRadius * (0.5f + audioEnergy * 0.15f),
+              center = Offset(cx, baselineY - minDimension * 0.12f),
+              radius = minDimension * 0.45f,
             ),
-            radius = baseRadius * (0.5f + audioEnergy * 0.15f),
-            center = Offset(cx - baseRadius * 0.28f, cy - baseRadius * 0.32f),
+            radius = minDimension * 0.45f,
+            center = Offset(cx, baselineY - minDimension * 0.12f),
           )
 
-          // Center core glow - reactive
+          // Illuminated gradient baseline
+          drawLine(
+            brush = Brush.horizontalGradient(
+              colors = listOf(
+                Color.Transparent,
+                primaryColor.copy(alpha = (0.70f + beat * 0.25f) * alphaMix),
+                secondaryColor.copy(alpha = (0.85f + beat * 0.15f) * alphaMix),
+                primaryColor.copy(alpha = (0.70f + beat * 0.25f) * alphaMix),
+                Color.Transparent,
+              ),
+              startX = startX - 12.dp.toPx(),
+              endX   = startX + totalWidth + 12.dp.toPx(),
+            ),
+            start = Offset(startX - 12.dp.toPx(), baselineY),
+            end   = Offset(startX + totalWidth + 12.dp.toPx(), baselineY),
+            strokeWidth = 2.dp.toPx(),
+            cap = StrokeCap.Round,
+          )
+
+          for (b in 0 until numBars) {
+            // Left half mirrors right half so bin 0 (bass) is in the center on both sides.
+            val halfIdx = if (b < numBars / 2) (numBars / 2 - 1 - b) else (b - numBars / 2)
+            val binIndex = (halfIdx.toFloat() / (numBars / 2 - 1f)) * (SPECTRUM_BINS - 1)
+            val binLow  = binIndex.toInt().coerceIn(0, SPECTRUM_BINS - 1)
+            val binHigh = (binLow + 1).coerceIn(0, SPECTRUM_BINS - 1)
+            val fracBin = binIndex - binLow
+            val rawMag = (spectrum[binLow] * (1f - fracBin) + spectrum[binHigh] * fracBin).coerceIn(0f, 1f)
+
+            // Dynamic perceptual scaling: boosts low/mid amplitudes so movement is vivid and clear
+            val dynamicMag = (rawMag.pow(0.75f) * 1.15f).coerceIn(0f, 1f)
+            val barHeight = minBarHeight + dynamicMag * (maxBarHeight - minBarHeight)
+
+            // Falling peak dots physics
+            if (barHeight >= eqPeaks[b]) {
+              eqPeaks[b] = barHeight
+              eqPeakVels[b] = 0f
+            } else {
+              eqPeakVels[b] += 220.dp.toPx() * dt
+              val maxVelEq = (eqPeaks[b] - minBarHeight) / dt
+              eqPeakVels[b] = eqPeakVels[b].coerceAtMost(maxVelEq.coerceAtLeast(0f))
+              eqPeaks[b] = (eqPeaks[b] - eqPeakVels[b] * dt).coerceAtLeast(minBarHeight)
+            }
+
+            val barX = startX + b * (barW + gapW)
+            // Color: center (bass) = primary, edges (treble) = tertiary
+            val colorFrac = halfIdx.toFloat() / (numBars / 2 - 1f)
+            val baseBarColor  = lerpColor(primaryColor, tertiaryColor, colorFrac)
+            val barColor = themedBarColor(baseBarColor, onSurface, overall)
+
+            // Equalizer bar (grows upward from baseline)
+            drawRoundRect(
+              brush = Brush.verticalGradient(
+                colors = listOf(
+                  barColor.copy(alpha = 0.98f * alphaMix),
+                  secondaryColor.copy(alpha = 0.88f * alphaMix),
+                  primaryColor.copy(alpha = 0.70f * alphaMix),
+                ),
+                startY = baselineY - barHeight,
+                endY   = baselineY,
+              ),
+              topLeft = Offset(barX, baselineY - barHeight),
+              size    = Size(barW, barHeight),
+              cornerRadius = CornerRadius(2.dp.toPx()),
+            )
+
+            // Mirror reflection (fades downward)
+            val reflHeight = minBarHeight * 0.5f + dynamicMag * (maxBarHeight * 0.38f)
+            drawRoundRect(
+              brush = Brush.verticalGradient(
+                colors = listOf(
+                  barColor.copy(alpha = (0.35f + dynamicMag * 0.20f) * alphaMix),
+                  primaryColor.copy(alpha = 0.15f * alphaMix),
+                  Color.Transparent,
+                ),
+                startY = baselineY + 1.dp.toPx(),
+                endY   = (baselineY + reflHeight + 1.dp.toPx()).coerceAtLeast(baselineY + 2.dp.toPx()),
+              ),
+              topLeft = Offset(barX, baselineY + 1.dp.toPx()),
+              size    = Size(barW, reflHeight.coerceAtLeast(1.dp.toPx())),
+              cornerRadius = CornerRadius(1.5.dp.toPx()),
+            )
+
+            // Falling peak cap
+            if (eqPeaks[b] > minBarHeight + 2.dp.toPx()) {
+              val peakDotY = baselineY - eqPeaks[b] - 3.dp.toPx()
+              drawRoundRect(
+                color    = barColor.copy(alpha = 0.95f * alphaMix),
+                topLeft  = Offset(barX, peakDotY),
+                size     = Size(barW, 2.5.dp.toPx()),
+                cornerRadius = CornerRadius(1.2.dp.toPx()),
+              )
+            }
+          }
+        }
+
+        MusicVisualizerStyle.OSCILLOSCOPE_RING -> {
+          // ── 3. Oscilloscope Ring: Glowing ring following real PCM waveform, smooth curves ──
+          val alphaMix = 0.55f + 0.45f * bands.audioMix
+          val waveform = AudioAnalyzer.latestWaveform
+          val pulse = blobPulse(bands, pausedScale)
+          val baseRadius = minDimension * 0.32f * (0.92f + pulse * 0.08f)
+          val pts = VIZ_POINTS
+          val step = (2f * PI.toFloat()) / pts
+
+          // Ambient radial bloom behind the ring
+          val glowAlpha = (0.35f + overall * 0.35f + bass * 0.25f + beat * 0.15f).coerceAtMost(0.90f)
           drawCircle(
             brush = Brush.radialGradient(
               colors = listOf(
-                onPrimaryColor.copy(alpha = 0.25f + audioEnergy * 0.3f),
+                tertiaryColor.copy(alpha = glowAlpha * 0.65f * alphaMix),
+                primaryColor.copy(alpha = glowAlpha * 0.40f * alphaMix),
                 Color.Transparent,
               ),
               center = Offset(cx, cy),
-              radius = baseRadius * (0.42f + audioEnergy * 0.2f),
+              radius = baseRadius * 1.22f,
             ),
-            radius = baseRadius * (0.42f + audioEnergy * 0.2f),
+            radius = baseRadius * 1.22f,
             center = Offset(cx, cy),
+          )
+
+          // Inner solid core disc with depth and popping pulse
+          val coreDiscRadius = (baseRadius * 0.55f * pulse).coerceAtMost(baseRadius * 0.78f)
+          drawCircle(
+            brush = Brush.radialGradient(
+              colors = listOf(
+                primaryColor.copy(alpha = (0.88f + overall * 0.12f).coerceAtMost(1f) * alphaMix),
+                tertiaryColor.copy(alpha = (0.78f + overall * 0.18f).coerceAtMost(1f) * alphaMix),
+                primaryColor.copy(alpha = 0.25f * alphaMix),
+              ),
+              center = Offset(cx - coreDiscRadius * 0.15f, cy - coreDiscRadius * 0.15f),
+              radius = coreDiscRadius * 1.3f,
+            ),
+            radius = coreDiscRadius,
+            center = Offset(cx, cy),
+          )
+
+          // Core accent ring that expands with beat
+          drawCircle(
+            color = onPrimaryColor.copy(alpha = (0.30f + beat * 0.35f) * alphaMix),
+            radius = coreDiscRadius * 0.82f,
+            center = Offset(cx, cy),
+            style = Stroke(width = 1.8.dp.toPx()),
+          )
+
+          // Pre-compute all ring points
+          val ringPoints = Array(pts) { i ->
+            val theta = i * step - PI.toFloat() / 2f
+            val wSample = if (waveform != null && waveform.isNotEmpty()) {
+              val idx = ((i.toFloat() / pts) * (waveform.size - 1)).toInt().coerceIn(0, waveform.size - 1)
+              waveform[idx]
+            } else {
+              // Smooth idle harmonic: three overlapping sinusoids driven by phase
+              sin(theta * 3f + bands.phase * 1.6f) * (0.075f + bass * 0.14f) +
+                cos(theta * 7f - bands.phase * 2.1f) * (0.045f + mid * 0.18f) +
+                sin(theta * 13f + bands.phase * 3.0f) * (0.022f + treble * 0.12f)
+            }
+            val waveAmp = baseRadius * 0.18f * (1f + mid * 0.40f + beat * 0.25f)
+            val strokeHalf = (8.dp.toPx() + mid * 5.dp.toPx()) / 2f
+            val maxRingR = (minDimension / 2f) * MAX_RADIUS_FRAC - strokeHalf
+            val r = (baseRadius + wSample * waveAmp)
+              .coerceIn(baseRadius * 0.65f, maxRingR)
+            Offset(cx + cos(theta) * r, cy + sin(theta) * r)
+          }
+
+          // Smooth closed path using midpoint quadratic Béziers
+          oscPath.reset()
+          val first = ringPoints[0]
+          val last  = ringPoints[pts - 1]
+          oscPath.moveTo((first.x + last.x) / 2f, (first.y + last.y) / 2f)
+          for (i in 0 until pts) {
+            val curr = ringPoints[i]
+            val next = ringPoints[(i + 1) % pts]
+            val midX = (curr.x + next.x) / 2f
+            val midY = (curr.y + next.y) / 2f
+            oscPath.quadraticTo(curr.x, curr.y, midX, midY)
+          }
+          oscPath.close()
+
+          val sweepBrush = Brush.sweepGradient(
+            colors = listOf(
+              themedBarColor(primaryColor, onSurface, overall).copy(alpha = 0.95f * alphaMix),
+              themedBarColor(secondaryColor, onSurface, overall).copy(alpha = 0.90f * alphaMix),
+              themedBarColor(tertiaryColor, onSurface, overall).copy(alpha = 0.95f * alphaMix),
+              themedBarColor(primaryColor, onSurface, overall).copy(alpha = 0.95f * alphaMix),
+            ),
+            center = Offset(cx, cy),
+          )
+
+          // Outer soft bloom stroke
+          drawPath(
+            path  = oscPath,
+            brush = sweepBrush,
+            style = Stroke(width = 8.dp.toPx() + mid * 5.dp.toPx(), cap = StrokeCap.Round),
+            alpha = 0.40f * alphaMix,
+          )
+
+          // Core crisp glowing ring
+          drawPath(
+            path  = oscPath,
+            brush = sweepBrush,
+            style = Stroke(width = 3.2.dp.toPx() + mid * 2.dp.toPx(), cap = StrokeCap.Round),
           )
         }
 
-        MusicVisualizerStyle.PULSE_RINGS -> {
-          // ── 2. Cosmic Ripple (Concentric Undulating Sound Waves) ──
-          val numRings = 4
-          val audioBoost = 1f + audioEnergy * 1.5f // Rings expand with audio
-          for (rIdx in 1..numRings) {
-            val ringRatio = rIdx.toFloat() / numRings
-            val ringRadius = baseRadius * (0.38f + ringRatio * 0.72f) * audioBoost
-            val ringAlpha = (1f - ringRatio * 0.42f).coerceIn(0.2f, 0.95f + audioEnergy * 0.05f)
-            val ringSpeed = 1.0f + rIdx * 0.35f + audioEnergy * 0.6f // Speed increases with audio
+        MusicVisualizerStyle.SPECTROGRAM_SCROLL -> {
+          // ── 4. Scrolling Spectrogram: Frequency on Y-axis, time scrolls left.
+          //    Uses the global AudioAnalyzer.spectrogramHistory (updated at audio capture rate
+          //    ~25 Hz) so the scroll speed is tied to audio, not the 60fps draw clock. ──
+          val alphaMix = 0.55f + 0.45f * bands.audioMix
+          val cols   = SPECTROGRAM_COLS
+          val rows   = SPECTRUM_BINS
+          val totalWidth  = minDimension * 0.90f
+          val totalHeight = minDimension * 0.74f
+          val startX = cx - totalWidth / 2f
+          val startY = cy - totalHeight / 2f
+          val colWidth  = totalWidth  / cols
+          val rowHeight = totalHeight / rows
 
-            outerPath.reset()
-            val numPoints = 64
-            val step = (2f * PI.toFloat()) / numPoints
-            val points = ArrayList<Offset>(numPoints)
-            val phaseOffset = continuousTime * ringSpeed + rIdx * 1.2f
+          // Ambient soft bloom behind spectrogram
+          drawRoundRect(
+            brush = Brush.radialGradient(
+              colors = listOf(
+                primaryColor.copy(alpha = (0.24f + bass * 0.25f + beat * 0.15f).coerceAtMost(0.60f) * alphaMix),
+                tertiaryColor.copy(alpha = 0.12f * alphaMix),
+                Color.Transparent,
+              ),
+              center = Offset(cx, cy),
+              radius = minDimension * 0.45f,
+            ),
+            topLeft = Offset(startX - 10.dp.toPx(), startY - 10.dp.toPx()),
+            size    = Size(totalWidth + 20.dp.toPx(), totalHeight + 20.dp.toPx()),
+            cornerRadius = CornerRadius(16.dp.toPx()),
+          )
 
-            for (i in 0 until numPoints) {
-              val theta = i * step
-              val deformation = sin(4f * theta + phaseOffset) * (0.12f + audioEnergy * 0.15f) * waveExcitation
-              val r = ringRadius * (1f + deformation)
-              points.add(Offset(cx + r * cos(theta), cy + r * sin(theta)))
-            }
+          // Background card
+          drawRoundRect(
+            color  = surfaceVariant.copy(alpha = 0.40f * alphaMix),
+            topLeft = Offset(startX - 4.dp.toPx(), startY - 4.dp.toPx()),
+            size    = Size(totalWidth + 8.dp.toPx(), totalHeight + 8.dp.toPx()),
+            cornerRadius = CornerRadius(14.dp.toPx()),
+          )
 
-            if (points.isNotEmpty()) {
-              val first = points[0]
-              val last = points.last()
-              val startMid = Offset((first.x + last.x) / 2f, (first.y + last.y) / 2f)
-              outerPath.moveTo(startMid.x, startMid.y)
-              for (i in 0 until numPoints) {
-                val curr = points[i]
-                val next = points[(i + 1) % numPoints]
-                val mid = Offset((curr.x + next.x) / 2f, (curr.y + next.y) / 2f)
-                outerPath.quadraticTo(curr.x, curr.y, mid.x, mid.y)
-              }
-              outerPath.close()
+          // Snapshot the deque under the lock once per draw frame.
+          val history: Array<FloatArray> = synchronized(AudioAnalyzer.spectrogramHistory) {
+            val h = AudioAnalyzer.spectrogramHistory
+            if (h.isEmpty()) null
+            else Array(h.size) { i -> h[i].copyOf() }
+          } ?: Array(1) { FloatArray(SPECTRUM_BINS) } // blank until data arrives
 
-              val ringColor = if (rIdx % 2 == 0) primaryColor else tertiaryColor
-              drawPath(
-                path = outerPath,
-                color = ringColor.copy(alpha = ringAlpha),
-                style = Stroke(
-                  width = (3.5f - ringRatio * 1.5f + audioEnergy * 1.2f).dp.toPx(),
-                  cap = StrokeCap.Round,
-                ),
+          val numCols = history.size // may be < SPECTROGRAM_COLS until history fills up
+
+          // Draw: column 0 (oldest) on left, column N-1 (newest) on right.
+          // We pad on the left with empty space when history hasn't filled yet.
+          val colOffset = cols - numCols // empty columns on the left
+          for (c in 0 until numCols) {
+            val specSlice = history[c]
+            val drawCol = colOffset + c
+            val colX = startX + drawCol * colWidth
+
+            for (r in 0 until rows) {
+              val rawMag = specSlice[r].coerceIn(0f, 1f)
+              if (rawMag < 0.03f) continue
+
+              // Non-linear perceptual scaling so cells illuminate vibrantly
+              val mag = (rawMag.pow(0.78f) * 1.15f).coerceIn(0f, 1f)
+
+              // Bin 0 = bass at bottom, bin (rows-1) = treble at top
+              val rowY = startY + totalHeight - (r + 1) * rowHeight
+
+              val cellColor = themedBarColor(
+                base = when {
+                  mag < 0.30f -> primaryColor.copy(alpha = (0.30f + mag * 1.6f) * alphaMix)
+                  mag < 0.65f -> lerpColor(primaryColor, secondaryColor, (mag - 0.30f) / 0.35f)
+                                .copy(alpha = (0.80f + mag * 0.20f) * alphaMix)
+                  else        -> lerpColor(secondaryColor, tertiaryColor, (mag - 0.65f) / 0.35f)
+                                .copy(alpha = 0.96f * alphaMix)
+                },
+                onSurface = onSurface,
+                overall = overall,
+              )
+
+              drawRoundRect(
+                color        = cellColor,
+                topLeft      = Offset(colX, rowY),
+                size         = Size((colWidth * 0.90f).coerceAtLeast(1.5.dp.toPx()), (rowHeight * 0.88f).coerceAtLeast(1.5.dp.toPx())),
+                cornerRadius = CornerRadius(1.2.dp.toPx()),
               )
             }
           }
 
-          // Center pulsing aura - reacts to audio
-          drawCircle(
-            brush = Brush.radialGradient(
+          // Glowing leading-edge cursor at the right (newest data side)
+          val edgeX = startX + totalWidth
+          drawLine(
+            brush = Brush.verticalGradient(
               colors = listOf(
-                primaryColor.copy(alpha = 0.85f + audioEnergy * 0.15f),
-                tertiaryColor.copy(alpha = 0.45f + audioEnergy * 0.1f),
-                Color.Transparent,
+                tertiaryColor.copy(alpha = 0.95f * alphaMix),
+                secondaryColor.copy(alpha = 0.90f * alphaMix),
+                primaryColor.copy(alpha = 0.95f * alphaMix),
               ),
-              center = Offset(cx, cy),
-              radius = baseRadius * (0.45f + audioEnergy * 0.2f),
+              startY = startY - 2.dp.toPx(),
+              endY   = startY + totalHeight + 2.dp.toPx(),
             ),
-            radius = baseRadius * (0.45f + audioEnergy * 0.2f),
-            center = Offset(cx, cy),
+            start = Offset(edgeX, startY - 2.dp.toPx()),
+            end   = Offset(edgeX, startY + totalHeight + 2.dp.toPx()),
+            strokeWidth = (2.5f + bass * 2.5f + beat * 2f).dp.toPx(),
+            cap = StrokeCap.Round,
           )
-        }
-
-        MusicVisualizerStyle.NEBULA_GLOW -> {
-          // ── 3. Chromatic Nebula (Orbiting Multi-Colored Plasma Spheres) ──
-          val numOrbs = 3
-          val orbitRadius = baseRadius * (0.35f + audioEnergy * 0.4f) // Enhanced audio response
-          val orbRadius = baseRadius * (0.65f + audioEnergy * 0.25f) // Orbs expand with audio
-          val orbSpeedBoost = 0.85f + audioEnergy * 0.8f // Faster orbit with audio
-
-          // Center ambient nebula cloud - reacts to audio
-          drawCircle(
-            brush = Brush.radialGradient(
-              colors = listOf(
-                secondaryColor.copy(alpha = 0.35f + audioEnergy * 0.2f),
-                Color.Transparent,
-              ),
-              center = Offset(cx, cy),
-              radius = baseRadius * (1.4f + audioEnergy * 0.35f),
-            ),
-            radius = baseRadius * (1.4f + audioEnergy * 0.35f),
-            center = Offset(cx, cy),
-          )
-
-          val orbColors = listOf(primaryColor, tertiaryColor, secondaryColor)
-          for (i in 0 until numOrbs) {
-            val orbAngle = continuousTime * orbSpeedBoost + (i * 2f * PI.toFloat() / numOrbs)
-            val orbX = cx + cos(orbAngle) * orbitRadius
-            val orbY = cy + sin(orbAngle) * orbitRadius
-            val color = orbColors[i % orbColors.size]
-
-            drawCircle(
-              brush = Brush.radialGradient(
-                colors = listOf(
-                  color.copy(alpha = 0.80f + audioEnergy * 0.2f),
-                  color.copy(alpha = 0.40f + audioEnergy * 0.15f),
-                  Color.Transparent,
-                ),
-                center = Offset(orbX, orbY),
-                radius = orbRadius,
-              ),
-              radius = orbRadius,
-              center = Offset(orbX, orbY),
-            )
-          }
-
-          // Overlapping core shimmer - more vibrant with audio
-          drawCircle(
-            brush = Brush.radialGradient(
-              colors = listOf(
-                onPrimaryColor.copy(alpha = 0.45f + audioEnergy * 0.2f),
-                Color.Transparent,
-              ),
-              center = Offset(cx, cy),
-              radius = baseRadius * (0.35f + audioEnergy * 0.15f),
-            ),
-            radius = baseRadius * (0.35f + audioEnergy * 0.15f),
-            center = Offset(cx, cy),
-          )
-        }
-
-        MusicVisualizerStyle.WIREFRAME_SPHERE -> {
-          // ── 4. Retro Wireframe Globe (NOW WITH AUDIO REACTIVITY!) ──
-          val sphereRadius = baseRadius * (0.95f + audioEnergy * 0.15f)
-          val rotationY = continuousTime * (0.6f + audioEnergy * 1.2f) // Spins faster with audio
-          val rotationX = sin(continuousTime * 0.3f) * 0.3f + audioEnergy * 0.4f // Added X-axis wobble
-          val baseStrokeWidth = 1.2f + audioEnergy * 1.5f // Thicker lines with audio
-          val color = primaryColor.copy(alpha = 0.65f + audioEnergy * 0.3f)
-          val latBands = 18
-          val lonBands = 24
-
-          fun project(lat: Float, lon: Float): Offset {
-            val x0 = cos(lat) * cos(lon)
-            val y0 = sin(lat)
-            val z0 = cos(lat) * sin(lon)
-            
-            // Apply X and Y rotations for wobble effect
-            val xr1 = x0 * cos(rotationY) + z0 * sin(rotationY)
-            val yr1 = y0 * cos(rotationX) - z0 * sin(rotationX)
-            val zr1 = y0 * sin(rotationX) + z0 * cos(rotationX)
-            val xr = xr1
-            val yr = yr1 * cos(rotationY) - zr1 * sin(rotationY)
-            
-            return Offset(cx + xr * sphereRadius, cy - yr * sphereRadius)
-          }
-
-          val latStep = PI.toFloat() / latBands
-          val lonStep = (2f * PI.toFloat()) / lonBands
-
-          // Latitude lines (horizontal bands)
-          for (i in 0..latBands) {
-            val lat = -PI.toFloat() / 2f + i * latStep
-            for (j in 0 until lonBands) {
-              val p1 = project(lat, j * lonStep)
-              val p2 = project(lat, (j + 1) * lonStep)
-              drawLine(color, p1, p2, strokeWidth = baseStrokeWidth)
-            }
-          }
-
-          // Longitude lines (vertical meridians)
-          for (j in 0 until lonBands) {
-            val lon = j * lonStep
-            for (i in 0 until latBands) {
-              val p1 = project(-PI.toFloat() / 2f + i * latStep, lon)
-              val p2 = project(-PI.toFloat() / 2f + (i + 1) * latStep, lon)
-              drawLine(color, p1, p2, strokeWidth = baseStrokeWidth)
-            }
-          }
-          
-          // Audio-reactive glow effect around the wireframe
-          if (audioEnergy > 0.1f) {
-            val glowRadius = sphereRadius * (1.1f + audioEnergy * 0.2f)
-            drawCircle(
-              brush = Brush.radialGradient(
-                colors = listOf(
-                  primaryColor.copy(alpha = audioEnergy * 0.3f),
-                  Color.Transparent,
-                ),
-                center = Offset(cx, cy),
-                radius = glowRadius,
-              ),
-              radius = glowRadius,
-              center = Offset(cx, cy),
-            )
-          }
         }
       }
     }
 
-    // Stylized floating music glyph in center (for non-wireframe styles)
-    if (style != MusicVisualizerStyle.WIREFRAME_SPHERE) {
+    // Stylized floating music glyph in center for circular visualizers
+    if (style == MusicVisualizerStyle.RADIAL_SPECTRUM ||
+      style == MusicVisualizerStyle.OSCILLOSCOPE_RING
+    ) {
+      val iconSize = if (style == MusicVisualizerStyle.OSCILLOSCOPE_RING) 56.dp else 50.dp
+      val iconTint = if (primaryColor.luminance() > 0.4f) {
+        onPrimaryColor.copy(alpha = 0.92f)
+      } else {
+        onSurface.copy(alpha = 0.85f)
+      }
       Icon(
         imageVector = Icons.Filled.Audiotrack,
         contentDescription = null,
-        tint = onPrimaryColor.copy(alpha = 0.88f),
+        tint = iconTint,
         modifier = Modifier
-          .size(46.dp)
+          .size(iconSize)
           .graphicsLayer {
-            scaleX = currentPulse
-            scaleY = currentPulse
+            if (bands.tick < 0L) return@graphicsLayer
+            val s = blobPulse(bands, pausedScale)
+            scaleX = s
+            scaleY = s
           },
       )
     }
@@ -2017,6 +2250,253 @@ private fun ActionBarButton(
   }
 }
 
+@Composable
+private fun RotatingVinylDisc(
+  modifier: Modifier = Modifier,
+) {
+  val infiniteTransition = rememberInfiniteTransition(label = "disc_rotation")
+  val rotation by infiniteTransition.animateFloat(
+    initialValue = 0f,
+    targetValue = 360f,
+    animationSpec = infiniteRepeatable(
+      animation = tween(6000, easing = LinearEasing),
+      repeatMode = AnimRepeatMode.Restart
+    ),
+    label = "disc_rotation_anim"
+  )
+
+  val primaryColor = MaterialTheme.colorScheme.primary
+  val secondaryColor = MaterialTheme.colorScheme.secondary
+  val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
+
+  Box(
+    modifier = modifier
+      .graphicsLayer {
+        rotationZ = rotation
+      },
+    contentAlignment = Alignment.Center,
+  ) {
+    Canvas(modifier = Modifier.fillMaxSize()) {
+      val center = Offset(size.width / 2f, size.height / 2f)
+      val radius = (kotlin.math.min(size.width, size.height) / 2f) * 0.96f
+
+      // ── 1. Vinyl Body: Anisotropic lighting with authentic dual specular cones ──
+      val vinylGradient = Brush.sweepGradient(
+        colors = listOf(
+          Color(0xFF0C0C0E),
+          Color(0xFF1C1D24),
+          Color(0xFF2E303C), // Specular reflection 1
+          Color(0xFF1C1D24),
+          Color(0xFF0C0C0E),
+          Color(0xFF15161C),
+          Color(0xFF0C0C0E),
+          Color(0xFF1C1D24),
+          Color(0xFF2E303C), // Specular reflection 2
+          Color(0xFF1C1D24),
+          Color(0xFF0C0C0E),
+          Color(0xFF15161C),
+          Color(0xFF0C0C0E),
+        ),
+        center = center
+      )
+      drawCircle(
+        brush = vinylGradient,
+        radius = radius,
+        center = center
+      )
+
+      // ── 2. Outer Beveled Rim & Run-in Groove ──
+      drawCircle(
+        color = Color(0xFF383A47).copy(alpha = 0.5f),
+        radius = radius,
+        center = center,
+        style = Stroke(width = 1.5.dp.toPx())
+      )
+      drawCircle(
+        color = Color(0xFF08080A),
+        radius = radius * 0.985f,
+        center = center,
+        style = Stroke(width = 2.dp.toPx())
+      )
+
+      // ── 3. Realistic Audio Groove Tracks (Clusters with silent band gaps) ──
+      // Track 1 (Outer): 0.77f .. 0.95f
+      for (i in 0..14) {
+        val rFrac = 0.77f + 0.18f * (i / 14f)
+        val alpha = if (i % 3 == 0) 0.35f else 0.18f
+        drawCircle(
+          color = Color(0xFF000000).copy(alpha = alpha),
+          radius = radius * rFrac,
+          center = center,
+          style = Stroke(width = (0.75f + (i % 2) * 0.5f).dp.toPx())
+        )
+      }
+
+      // Inter-track silence gap 1
+      drawCircle(
+        color = Color(0xFF0A0A0D),
+        radius = radius * 0.755f,
+        center = center,
+        style = Stroke(width = 2.5.dp.toPx())
+      )
+
+      // Track 2 (Mid): 0.57f .. 0.74f
+      for (i in 0..12) {
+        val rFrac = 0.57f + 0.17f * (i / 12f)
+        val alpha = if (i % 3 == 0) 0.32f else 0.16f
+        drawCircle(
+          color = Color(0xFF000000).copy(alpha = alpha),
+          radius = radius * rFrac,
+          center = center,
+          style = Stroke(width = (0.75f + (i % 2) * 0.5f).dp.toPx())
+        )
+      }
+
+      // Inter-track silence gap 2
+      drawCircle(
+        color = Color(0xFF0A0A0D),
+        radius = radius * 0.555f,
+        center = center,
+        style = Stroke(width = 2.5.dp.toPx())
+      )
+
+      // Track 3 (Inner): 0.42f .. 0.54f
+      for (i in 0..8) {
+        val rFrac = 0.42f + 0.12f * (i / 8f)
+        val alpha = if (i % 2 == 0) 0.30f else 0.15f
+        drawCircle(
+          color = Color(0xFF000000).copy(alpha = alpha),
+          radius = radius * rFrac,
+          center = center,
+          style = Stroke(width = 0.8.dp.toPx())
+        )
+      }
+
+      // ── 4. Dead Wax / Lead-out Groove (Smooth inner vinyl before label) ──
+      drawCircle(
+        color = Color(0xFF0F0F13),
+        radius = radius * 0.40f,
+        center = center
+      )
+      drawCircle(
+        color = Color(0xFF1E2028).copy(alpha = 0.45f),
+        radius = radius * 0.38f,
+        center = center,
+        style = Stroke(width = 0.9.dp.toPx())
+      )
+      drawCircle(
+        color = Color(0xFF1E2028).copy(alpha = 0.35f),
+        radius = radius * 0.36f,
+        center = center,
+        style = Stroke(width = 0.9.dp.toPx())
+      )
+
+      // ── 5. Center Label Edge & Paper Bevel ──
+      val labelRadius = radius * 0.335f
+
+      // Outer label shadow/groove
+      drawCircle(
+        color = Color(0xFF070709),
+        radius = labelRadius + 1.5.dp.toPx(),
+        center = center,
+        style = Stroke(width = 2.dp.toPx())
+      )
+
+      // Label background (luxurious radial gradient with primary tint)
+      drawCircle(
+        brush = Brush.radialGradient(
+          colors = listOf(
+            primaryColor.copy(alpha = 0.92f),
+            primaryColor.copy(alpha = 0.78f),
+            secondaryColor.copy(alpha = 0.85f),
+          ),
+          center = center,
+          radius = labelRadius
+        ),
+        radius = labelRadius,
+        center = center
+      )
+
+      // Decorative golden/subtle label border ring
+      drawCircle(
+        color = onPrimaryColor.copy(alpha = 0.35f),
+        radius = labelRadius * 0.92f,
+        center = center,
+        style = Stroke(width = 1.2.dp.toPx())
+      )
+      drawCircle(
+        color = onPrimaryColor.copy(alpha = 0.20f),
+        radius = labelRadius * 0.87f,
+        center = center,
+        style = Stroke(width = 0.8.dp.toPx())
+      )
+
+      // Lower decorative arc / divider on label
+      drawCircle(
+        color = onPrimaryColor.copy(alpha = 0.25f),
+        radius = labelRadius * 0.48f,
+        center = center,
+        style = Stroke(width = 0.9.dp.toPx())
+      )
+
+      // ── 6. Center Spindle Hole ──
+      // Outer black grommet shadow
+      drawCircle(
+        color = Color(0xFF0E0E12),
+        radius = radius * 0.085f,
+        center = center
+      )
+      // Metallic silver spindle washer/ring
+      drawCircle(
+        brush = Brush.sweepGradient(
+          colors = listOf(
+            Color(0xFFD4D6DC),
+            Color(0xFF8A8D98),
+            Color(0xFFECEEF2),
+            Color(0xFF8A8D98),
+            Color(0xFFD4D6DC)
+          ),
+          center = center
+        ),
+        radius = radius * 0.072f,
+        center = center
+      )
+      // Spindle hole center (dark hole)
+      drawCircle(
+        color = Color(0xFF14151A),
+        radius = radius * 0.052f,
+        center = center
+      )
+    }
+
+    // ── Label Typography: "JustPlayer" in italics ──
+    Column(
+      modifier = Modifier
+        .fillMaxSize(0.32f),
+      horizontalAlignment = Alignment.CenterHorizontally,
+      verticalArrangement = Arrangement.Center,
+    ) {
+      Text(
+        text = "JustPlayer",
+        color = onPrimaryColor.copy(alpha = 0.95f),
+        fontStyle = FontStyle.Italic,
+        fontWeight = FontWeight.Bold,
+        fontSize = 13.sp,
+        maxLines = 1,
+        letterSpacing = 0.4.sp,
+      )
+      Spacer(Modifier.height(18.dp))
+      Text(
+        text = "STEREO",
+        color = onPrimaryColor.copy(alpha = 0.70f),
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 7.5.sp,
+        letterSpacing = 1.2.sp,
+      )
+    }
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // Cover art  (when artwork bitmap is present)
 // ─────────────────────────────────────────────────────────────────────────────
@@ -2024,8 +2504,6 @@ private fun ActionBarButton(
 @Composable
 private fun AudioCoverArt(
   bitmap: Bitmap?,
-  style: MusicVisualizerStyle = MusicVisualizerStyle.FLUID_BLOB,
-  audioEnergy: Float = 0f,
 ) {
   if (bitmap != null && !bitmap.isRecycled) {
     Image(
@@ -2037,12 +2515,16 @@ private fun AudioCoverArt(
         .background(MaterialTheme.colorScheme.surfaceVariant),
     )
   } else {
-    AnimatedMusicBlob(
-      paused = false,
-      style = style,
-      audioEnergy = audioEnergy,
-      modifier = Modifier.fillMaxSize(),
-    )
+    Box(
+      modifier = Modifier
+        .fillMaxSize()
+        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.40f)),
+      contentAlignment = Alignment.Center,
+    ) {
+      RotatingVinylDisc(
+        modifier = Modifier.fillMaxSize()
+      )
+    }
   }
 }
 
@@ -2185,6 +2667,3 @@ private fun PropRow(label: String, value: String) {
   }
   Spacer(Modifier.height(6.dp))
 }
-
-
-

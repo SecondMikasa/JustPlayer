@@ -22,17 +22,17 @@ class AudioPreferences(
   val equalizerGains = preferenceStore.getString("equalizer_gains", "0,0,0,0,0")
   val equalizerVolumeBoost = preferenceStore.getInt("equalizer_volume_boost", 0)
 
-  val musicPlaceholderVisualizer = preferenceStore.getEnum("music_placeholder_visualizer", MusicVisualizerStyle.FLUID_BLOB)
+  val musicPlaceholderVisualizer = preferenceStore.getEnum("music_placeholder_visualizer", MusicVisualizerStyle.RADIAL_SPECTRUM)
   val audioReactiveVisualizer = preferenceStore.getBoolean("audio_reactive_visualizer", false)
 }
 
 enum class MusicVisualizerStyle(
   @StringRes val title: Int,
 ) {
-  FLUID_BLOB(R.string.pref_visualizer_style_fluid_blob),
-  PULSE_RINGS(R.string.pref_visualizer_style_pulse_rings),
-  NEBULA_GLOW(R.string.pref_visualizer_style_nebula_glow),
-  WIREFRAME_SPHERE(R.string.pref_visualizer_style_wireframe_sphere),
+  RADIAL_SPECTRUM(R.string.pref_visualizer_style_radial_spectrum),
+  MIRRORED_EQ_BARS(R.string.pref_visualizer_style_mirrored_eq),
+  OSCILLOSCOPE_RING(R.string.pref_visualizer_style_oscilloscope_ring),
+  SPECTROGRAM_SCROLL(R.string.pref_visualizer_style_spectrogram_scroll),
 }
 
 enum class AudioChannels(

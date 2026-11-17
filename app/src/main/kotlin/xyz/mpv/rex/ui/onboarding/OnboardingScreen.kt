@@ -88,6 +88,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import android.content.pm.PackageManager
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
+import xyz.mpv.rex.preferences.AudioPreferences
 
 // ---------------------------------------------------------------------------
 // Data model
@@ -287,6 +289,7 @@ private fun StoragePage(onAdvance: () -> Unit) {
 @Composable
 private fun MicrophonePage(onAdvance: () -> Unit) {
     val context = LocalContext.current
+    val audioPreferences = koinInject<AudioPreferences>()
     var granted by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(
@@ -299,6 +302,7 @@ private fun MicrophonePage(onAdvance: () -> Unit) {
         ActivityResultContracts.RequestPermission()
     ) { isGranted ->
         granted = isGranted
+        audioPreferences.audioReactiveVisualizer.set(isGranted)
         onAdvance()
     }
 
@@ -310,10 +314,17 @@ private fun MicrophonePage(onAdvance: () -> Unit) {
         primaryLabel = if (granted) "Let's Go!" else "Allow Microphone",
         skippable    = true,
         onPrimary    = {
-            if (granted) onAdvance()
-            else launcher.launch(Manifest.permission.RECORD_AUDIO)
+            if (granted) {
+                audioPreferences.audioReactiveVisualizer.set(true)
+                onAdvance()
+            } else {
+                launcher.launch(Manifest.permission.RECORD_AUDIO)
+            }
         },
-        onSkip  = onAdvance,
+        onSkip  = {
+            audioPreferences.audioReactiveVisualizer.set(false)
+            onAdvance()
+        },
         granted = granted,
     )
 }

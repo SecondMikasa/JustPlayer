@@ -1012,10 +1012,10 @@
 
     <string name="pref_visualizer_header">Music Visualizer</string>
     <string name="pref_visualizer_style_title">Artwork Visualizer Style</string>
-    <string name="pref_visualizer_style_fluid_blob">Fluid Aura</string>
-    <string name="pref_visualizer_style_pulse_rings">Cosmic Ripple</string>
-    <string name="pref_visualizer_style_nebula_glow">Chromatic Nebula</string>
-    <string name="pref_visualizer_style_wireframe_sphere">Retro Wireframe</string>
+    <string name="pref_visualizer_style_radial_spectrum">Radial Spectrum</string>
+    <string name="pref_visualizer_style_mirrored_eq">Mirrored Equalizer</string>
+    <string name="pref_visualizer_style_oscilloscope_ring">Oscilloscope Ring</string>
+    <string name="pref_visualizer_style_spectrogram_scroll">Spectrogram Scroll</string>
     <string name="pref_audio_reactive_title">Audio-Reactive Visualizer</string>
     <string name="pref_audio_reactive_summary">Make visualizers pulse and react to music in real-time using microphone audio input</string>
 

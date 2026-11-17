@@ -73,6 +73,7 @@ enum class ControlRegion {
     BOTTOM_LEFT,
     PORTRAIT_BOTTOM,
     MORE_SHEET,
+    AUDIO_BOTTOM,
 }
 
 @Serializable
@@ -120,6 +121,7 @@ object PlayerControlsPreferencesScreen : Screen {
         val bottomLState by appearancePrefs.bottomLeftControls.collectAsState()
         val portraitBottomState by appearancePrefs.portraitBottomControls.collectAsState()
         val moreSheetState by appearancePrefs.moreSheetControls.collectAsState()
+        val audioBottomState by appearancePrefs.audioBottomControls.collectAsState()
 
         val topRightButtons = remember(topRState) {
             appearancePrefs.parseButtons(topRState, mutableSetOf())
@@ -132,6 +134,9 @@ object PlayerControlsPreferencesScreen : Screen {
         }
         val portraitBottomButtons = remember(portraitBottomState) {
             appearancePrefs.parseButtons(portraitBottomState, mutableSetOf())
+        }
+        val audioBottomButtons = remember(audioBottomState) {
+            appearancePrefs.parseButtons(audioBottomState, mutableSetOf())
         }
         val moreSheetButtons = remember(moreSheetState, topRState, bottomRState, bottomLState, portraitBottomState) {
             val manualOrder = appearancePrefs.parseButtons(moreSheetState, mutableSetOf())
@@ -249,6 +254,22 @@ object PlayerControlsPreferencesScreen : Screen {
                                 },
                             )
                             PreferenceIconSummary(buttons = moreSheetButtons)
+                        }
+                    }
+
+                    // Music Player Controls Section
+                    item {
+                        PreferenceSectionHeader(title = stringResource(R.string.pref_layout_audio_controls_header))
+                    }
+                    item {
+                        PreferenceCard {
+                            PreferenceCategoryWithEditButton(
+                                title = stringResource(id = R.string.pref_layout_audio_bottom_controls),
+                                onClick = {
+                                    backstack.add(ControlLayoutEditorScreen(ControlRegion.AUDIO_BOTTOM))
+                                },
+                            )
+                            PreferenceIconSummary(buttons = audioBottomButtons)
                         }
                     }
 
