@@ -196,31 +196,10 @@ class MPVView(
   override fun surfaceCreated(holder: SurfaceHolder) {
     super.surfaceCreated(holder)
     if (!MPVLifecycleLock.isNativeInitialized) return
-
-    // Audio may have been loaded while vo=null with no video track selected. Unlike vid=auto,
-    // selecting the attached-picture track by ID reliably starts its single-frame decoder.
-    // ONLY do this if the file has NO real (non-albumart) video tracks (i.e. audio-only files).
-    val trackCount = runCatching { MPVLib.getPropertyInt("track-list/count") ?: 0 }.getOrDefault(0)
-    var hasRealVideoTrack = false
-    var albumArtTrackId: Int? = null
-
-    for (index in 0 until trackCount) {
-      val type = runCatching { MPVLib.getPropertyString("track-list/$index/type") }.getOrNull()
-      if (type == "video") {
-        val isAlbumArt = runCatching { MPVLib.getPropertyBoolean("track-list/$index/albumart") }.getOrNull()
-        val id = runCatching { MPVLib.getPropertyInt("track-list/$index/id") }.getOrNull()
-        if (isAlbumArt == true) {
-          if (albumArtTrackId == null) albumArtTrackId = id
-        } else {
-          hasRealVideoTrack = true
-        }
-      }
-    }
-
-    if (!hasRealVideoTrack && albumArtTrackId != null) {
-      runCatching { MPVLib.setPropertyInt("vid", albumArtTrackId) }
-      runCatching { MPVLib.command("seek", "0", "relative+exact") }
-    }
+    // Note: Do not alter vid or issue seek commands for audio media without video tracks.
+    // In JustPlayer, audio cover art is rendered directly by Compose (AudioPlayerControls).
+    // Issuing a seek or vid change while audio is streaming flushes mpv's audio buffer
+    // and causes an audible pop/crack.
   }
 
   override fun postInitOptions() {

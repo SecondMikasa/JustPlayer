@@ -1,5 +1,7 @@
 package xyz.mpv.rex.ui.player
 
+import android.app.Activity
+import android.app.ActivityOptions
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
@@ -350,9 +352,30 @@ class PlayerActivity :
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     activeInstance = this
-    // Smooth fade-in transition when opening the player from list
-    @Suppress("DEPRECATION")
-    overridePendingTransition(android.R.anim.fade_in, 0)
+    val fromMiniPlayer = intent.getBooleanExtra("from_mini_player", false)
+    val isAudioInit = intent.getBooleanExtra("is_audio", false) || isCurrentMediaAudio()
+    if (fromMiniPlayer) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
+      } else {
+        @Suppress("DEPRECATION")
+        overridePendingTransition(0, 0)
+      }
+    } else if (isAudioInit) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        overrideActivityTransition(
+          Activity.OVERRIDE_TRANSITION_OPEN,
+          R.anim.player_slide_in_bottom,
+          R.anim.player_stay
+        )
+      } else {
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.player_slide_in_bottom, R.anim.player_stay)
+      }
+    } else {
+      @Suppress("DEPRECATION")
+      overridePendingTransition(android.R.anim.fade_in, 0)
+    }
     super.onCreate(savedInstanceState)
     setContentView(binding.root)
 
@@ -369,6 +392,7 @@ class PlayerActivity :
     val isAudio = isCurrentMediaAudio()
     if (isAudio) {
       volumeControlStream = AudioManager.STREAM_MUSIC
+      safeSetRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
     }
     viewModel.setIsAudioMedia(isAudio)
     viewModel.onMpvCoreInitialized()
@@ -493,14 +517,6 @@ class PlayerActivity :
         endBackgroundPlayback()
         enableVideoAfterBackground()
         miniPlayerStateManager.clearState()
-      }
-      
-      val isAudioNow = isCurrentMediaAudio()
-      if (isAudioNow) {
-        runCatching {
-          MPVLib.setPropertyString("vid", "no")
-          MPVLib.setPropertyString("audio-display", "no")
-        }
       }
 
       if (isUriM3U(playableUri)) {
@@ -639,9 +655,10 @@ class PlayerActivity :
       return
     }
 
-    // Transition to background mode and MiniPlayer when going back to file browser only if video is actively playing
+    val isAudio = viewModel.isAudioMedia.value
+    // Transition to background mode and MiniPlayer when going back to file browser only if video is actively playing, or always for audio sessions
     val isPaused = viewModel.paused ?: (runCatching { MPVLib.getPropertyBoolean("pause") }.getOrNull() == true)
-    if (isReady && fileName.isNotBlank() && !isPaused && audioPreferences.automaticBackgroundPlayback.get()) {
+    if (isReady && fileName.isNotBlank() && (isAudio || (!isPaused && audioPreferences.automaticBackgroundPlayback.get()))) {
       isManualBackgroundPlayback = true
       startBackgroundPlayback()
       disableVideoForBackground()
@@ -649,14 +666,42 @@ class PlayerActivity :
       val mainIntent = Intent(this, MainActivity::class.java).apply {
         flags = Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP
       }
-      startActivity(mainIntent)
-
+      val options = if (isAudio) {
+        ActivityOptions.makeCustomAnimation(this, R.anim.player_stay, R.anim.player_slide_out_bottom)
+      } else {
+        ActivityOptions.makeCustomAnimation(this, 0, android.R.anim.fade_out)
+      }
+      startActivity(mainIntent, options.toBundle())
+      if (isAudio) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+          overrideActivityTransition(
+            Activity.OVERRIDE_TRANSITION_OPEN,
+            R.anim.player_stay,
+            R.anim.player_slide_out_bottom
+          )
+        } else {
+          @Suppress("DEPRECATION")
+          overridePendingTransition(R.anim.player_stay, R.anim.player_slide_out_bottom)
+        }
+      }
       return
     }
 
     isUserFinishing = true
     miniPlayerStateManager.clearState()
     finish()
+    if (isAudio) {
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        overrideActivityTransition(
+          Activity.OVERRIDE_TRANSITION_CLOSE,
+          R.anim.player_stay,
+          R.anim.player_slide_out_bottom
+        )
+      } else {
+        @Suppress("DEPRECATION")
+        overridePendingTransition(R.anim.player_stay, R.anim.player_slide_out_bottom)
+      }
+    }
   }
 
   @RequiresApi(Build.VERSION_CODES.P)
@@ -1630,11 +1675,23 @@ class PlayerActivity :
     }
   }
 
+  fun safeSetRequestedOrientation(orientation: Int) {
+    try {
+      requestedOrientation = orientation
+    } catch (e: Exception) {
+      Log.w(TAG, "Failed to set requestedOrientation: ${e.message}")
+    }
+  }
+
   /**
    * Sets initial orientation synchronously from intent parameters or metadata cache
    * to avoid orientation jumps on activity launch or intent update.
    */
   private fun applyInitialOrientationFromIntent(targetIntent: Intent) {
+    if (isCurrentMediaAudio()) {
+      safeSetRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
+      return
+    }
     val orient = playerPreferences.orientation.get()
     if (orient != PlayerOrientation.Video && orient != PlayerOrientation.Smart) {
       setOrientation()
@@ -1644,7 +1701,7 @@ class PlayerActivity :
     // 1. Try saved orientation from intent extras (for Smart mode)
     val intentSavedOrientation = targetIntent.getIntExtra("saved_orientation", ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
     if (orient == PlayerOrientation.Smart && intentSavedOrientation != ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
-      requestedOrientation = intentSavedOrientation
+      safeSetRequestedOrientation(intentSavedOrientation)
       isOrientationRestored = true
       Log.d(TAG, "applyInitialOrientationFromIntent - Smart mode: using restored orientation $requestedOrientation from intent")
       return
@@ -1666,7 +1723,7 @@ class PlayerActivity :
         val state = playbackStateRepository.getVideoDataByTitle(targetFileName)
         if (state?.savedOrientation != null && state.savedOrientation != ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
           withContext(Dispatchers.Main) {
-            requestedOrientation = state.savedOrientation
+            safeSetRequestedOrientation(state.savedOrientation)
             isOrientationRestored = true
             Log.d(TAG, "applyInitialOrientationFromIntent - Smart mode: using restored orientation $requestedOrientation from DB")
           }
@@ -2089,15 +2146,17 @@ class PlayerActivity :
       }
     }
 
-    // Only set orientation if NOT in Video or Smart mode, or if orientation has not been determined yet.
-    // For audio-only files, always call setOrientation() so the device can rotate freely.
-    val orientation = playerPreferences.orientation.get()
-    if (orientation != PlayerOrientation.Video && orientation != PlayerOrientation.Smart) {
-      setOrientation()
-    } else if (viewModel.isAudioMedia.value) {
-      setOrientation()
-    } else if (requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
-      applyInitialOrientationFromIntent(intent)
+    // For audio-only files, follow system/app layout.
+    // For video files, set orientation according to player preferences (Video, Smart, etc.).
+    if (viewModel.isAudioMedia.value || isCurrentMediaAudio()) {
+      safeSetRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
+    } else {
+      val orientation = playerPreferences.orientation.get()
+      if (orientation != PlayerOrientation.Video && orientation != PlayerOrientation.Smart) {
+        setOrientation()
+      } else if (requestedOrientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) {
+        applyInitialOrientationFromIntent(intent)
+      }
     }
 
     applySubtitlePreferences()
@@ -2563,7 +2622,7 @@ class PlayerActivity :
     // Restore orientation if in Smart mode
     if (playerPreferences.orientation.get() == PlayerOrientation.Smart && state.savedOrientation != null) {
       withContext(Dispatchers.Main) {
-        requestedOrientation = state.savedOrientation
+        safeSetRequestedOrientation(state.savedOrientation)
         isOrientationRestored = true
         Log.d(TAG, "Restored orientation for Smart mode: ${state.savedOrientation}")
       }
@@ -2646,9 +2705,14 @@ class PlayerActivity :
     val isAudioIncoming = isCurrentMediaAudio()
     if (isAudioIncoming) {
       volumeControlStream = AudioManager.STREAM_MUSIC
+      safeSetRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
       runCatching {
-        MPVLib.setPropertyString("vid", "no")
-        MPVLib.setPropertyString("audio-display", "no")
+        if (MPVLib.getPropertyString("vid") != "no") {
+          MPVLib.setPropertyString("vid", "no")
+        }
+        if (MPVLib.getPropertyString("audio-display") != "no") {
+          MPVLib.setPropertyString("audio-display", "no")
+        }
       }
     }
     viewModel.setIsAudioMedia(isAudioIncoming)
@@ -2661,8 +2725,13 @@ class PlayerActivity :
     if (isReady && (incomingUri == null || (isSameMedia && !isInBackgroundPlayback && !isManualBackgroundPlayback))) {
       Log.d(TAG, "onNewIntent: current media already playing or expanding active session, restoring player without reload")
       enableVideoAfterBackground()
-      @Suppress("DEPRECATION")
-      overridePendingTransition(android.R.anim.fade_in, 0)
+      // No animation — activity is already rendered; instant reveal avoids a black crack.
+      if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+        overrideActivityTransition(Activity.OVERRIDE_TRANSITION_OPEN, 0, 0)
+      } else {
+        @Suppress("DEPRECATION")
+        overridePendingTransition(0, 0)
+      }
       return
     }
     // Check if this intent has playlist information
@@ -2887,9 +2956,13 @@ class PlayerActivity :
    * @param rotation Optional video rotation from metadata to correctly determine aspect ratio
    */
   private fun setOrientation(width: Int = -1, height: Int = -1, rotation: Int = 0) {
+    if (isCurrentMediaAudio()) {
+      safeSetRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
+      return
+    }
     val orientationPref = playerPreferences.orientation.get()
 
-    requestedOrientation =
+    safeSetRequestedOrientation(
       when (orientationPref) {
         PlayerOrientation.Free -> ActivityInfo.SCREEN_ORIENTATION_SENSOR
         PlayerOrientation.Smart, PlayerOrientation.Video -> {
@@ -2922,9 +2995,9 @@ class PlayerActivity :
             val aspect = runCatching { player.getVideoOutAspect() }.getOrNull()
             Log.d(TAG, "setOrientation - ${if (isSmartMode) "Smart (fallback)" else "Video"} mode: aspect=$aspect")
             if (aspect == null || aspect <= 0.0) {
-              // Audio-only file: allow sensor-based free rotation
-              Log.d(TAG, "setOrientation - Audio-only file, allowing free rotation")
-              ActivityInfo.SCREEN_ORIENTATION_SENSOR
+              // Audio-only file: follow app and system layout
+              Log.d(TAG, "setOrientation - Audio-only file, following app and system layout")
+              ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             } else {
               // Aspect available - set correct orientation now
               val orientation = if (aspect > 1.0) {
@@ -2945,6 +3018,7 @@ class PlayerActivity :
         PlayerOrientation.ReverseLandscape -> ActivityInfo.SCREEN_ORIENTATION_REVERSE_LANDSCAPE
         PlayerOrientation.SensorLandscape -> ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
       }
+    )
   }
 
   // ==================== Key Event Handling ====================
@@ -3373,6 +3447,11 @@ class PlayerActivity :
    */
   private fun enableVideoAfterBackground() {
     isInBackgroundPlayback = false
+    // Do not touch vid for audio-only sessions — setting vid="auto" on audio causes
+    // libmpv to renegotiate streams and produces an audible pop/crack.
+    if (isCurrentMediaAudio() || !hasVideoTrack()) {
+      return
+    }
     if (lastVid > 0) {
       Log.d(TAG, "Restoring video after background playback (vid: $lastVid)")
       MPVLib.setPropertyInt("vid", lastVid)
@@ -3427,7 +3506,10 @@ class PlayerActivity :
         if (mime?.startsWith("audio/") == true) return true
       }
     }
-    return !hasVideoTrack()
+    if (mpvInitialized && isReady) {
+      return !hasVideoTrack()
+    }
+    return false
   }
 
   private suspend fun createVideoForUri(uri: Uri): Video = withContext(Dispatchers.IO) {
@@ -3610,7 +3692,7 @@ class PlayerActivity :
   override var hostRequestedOrientation: Int
     get() = requestedOrientation
     set(value) {
-      requestedOrientation = value
+      safeSetRequestedOrientation(value)
     }
 
   @Suppress("DEPRECATION")

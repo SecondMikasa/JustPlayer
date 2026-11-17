@@ -13,6 +13,7 @@ import xyz.mpv.rex.ui.player.MediaPlaybackService
 import xyz.mpv.rex.ui.player.HeadlessPlaybackController
 import xyz.mpv.rex.ui.player.RepeatMode
 import xyz.mpv.rex.preferences.PlayerPreferences
+import xyz.mpv.rex.R
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import `is`.xyz.mpv.MPVLib
@@ -247,6 +248,7 @@ class MiniPlayerStateManager : KoinComponent {
       // Tell PlayerActivity whether this is an audio-only session so it launches
       // AudioPlayerControls instead of the video player, regardless of file extension checks.
       putExtra("is_audio", _state.value.isAudio)
+      putExtra("from_mini_player", true)
       // Direct mini player mode: hand the live headless MPV session over to PlayerActivity
       // instead of starting a fresh playback (which would double-create MPV).
       if (headlessPlaybackController.isSessionActive) {
@@ -256,10 +258,10 @@ class MiniPlayerStateManager : KoinComponent {
         putExtra("title", headlessPlaybackController.activeTitle)
       }
     }
-    context.startActivity(
-      intent,
-      ActivityOptions.makeCustomAnimation(context, android.R.anim.fade_in, 0).toBundle()
-    )
+    // Use no animation for REORDER_TO_FRONT — PlayerActivity is already rendered behind
+    // MainActivity so revealing it instantly avoids any "crack" or black flash between surfaces.
+    val options = ActivityOptions.makeCustomAnimation(context, 0, 0)
+    context.startActivity(intent, options.toBundle())
   }
 }
 

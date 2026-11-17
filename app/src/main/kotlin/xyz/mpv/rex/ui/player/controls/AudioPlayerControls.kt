@@ -3,8 +3,11 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.view.WindowManager
 import androidx.activity.compose.LocalActivity
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode as AnimRepeatMode
@@ -401,6 +404,7 @@ fun AudioPlayerControls(
     (configuration.screenWidthDp.dp * 0.92f) / 2f
   }
 
+  // Circular vinyl disc container for cover art; rectangular when special visualizers active
   val targetCornerRadius = if (isRectangularVisualizer) {
     if (isPaused) 22.dp else 28.dp
   } else {
@@ -423,6 +427,21 @@ fun AudioPlayerControls(
     ),
     label = "artElevation",
   )
+
+  // Vinyl disc rotation — continuously spins while playing, freezes in place when paused
+  val vinylRotation = remember { Animatable(0f) }
+  LaunchedEffect(isPaused) {
+    if (!isPaused) {
+      while (isActive) {
+        val currentAngle = vinylRotation.value
+        vinylRotation.animateTo(
+          targetValue = currentAngle + 360f,
+          animationSpec = tween(durationMillis = 8000, easing = LinearEasing),
+        )
+        vinylRotation.snapTo(vinylRotation.value % 360f)
+      }
+    }
+  }
 
   // ── Play/Pause Button Animation ──────────────────────────────────────────
   val playToPauseIcon = AnimatedImageVector.animatedVectorResource(R.drawable.anim_play_to_pause)
@@ -454,6 +473,42 @@ fun AudioPlayerControls(
 
   var showAudioProperties by remember { mutableStateOf(false) }
   var showAddToPlaylistDialog by remember { mutableStateOf(false) }
+
+  val swipeDownModifier = if (noSheetOpen) {
+    Modifier.pointerInput(Unit) {
+      var totalDrag = 0f
+      var triggered = false
+      detectVerticalDragGestures(
+        onDragStart = {
+          totalDrag = 0f
+          triggered = false
+        },
+        onDragEnd = {
+          if (!triggered && totalDrag > 50f) {
+            triggered = true
+            onBackPress()
+          }
+          totalDrag = 0f
+        },
+        onDragCancel = {
+          totalDrag = 0f
+          triggered = false
+        },
+        onVerticalDrag = { change, dragAmount ->
+          if (dragAmount > 0) {
+            totalDrag += dragAmount
+            if (!triggered && totalDrag > 80f) {
+              triggered = true
+              change.consume()
+              onBackPress()
+            }
+          }
+        }
+      )
+    }
+  } else {
+    Modifier
+  }
 
   @Composable
   fun AudioBottomBar(modifier: Modifier = Modifier) {
@@ -710,15 +765,18 @@ fun AudioPlayerControls(
               .graphicsLayer {
                 scaleX = artScale
                 scaleY = artScale
+                rotationZ = if (!displayVisualizer && !isRectangularVisualizer) vinylRotation.value else 0f
                 this.shadowElevation = artElevation.toPx()
                 this.shape = RoundedCornerShape(artCornerRadius)
                 this.clip = true
               }
-              .clip(RoundedCornerShape(artCornerRadius)),
+              .clip(RoundedCornerShape(artCornerRadius))
+              .then(swipeDownModifier),
           ) {
             Box(
               modifier = Modifier
                 .fillMaxSize()
+                .then(swipeDownModifier)
                 .combinedClickable(
                   onClick = {},
                   onLongClick = {
@@ -755,7 +813,9 @@ fun AudioPlayerControls(
         ) {
           // Top bar: Back, Now Playing, Info
           Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+              .fillMaxWidth()
+              .then(swipeDownModifier),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
           ) {
@@ -1041,7 +1101,9 @@ fun AudioPlayerControls(
 
         // ── Top bar ──────────────────────────────────────────────────────────
         Row(
-          modifier = Modifier.fillMaxWidth(),
+          modifier = Modifier
+            .fillMaxWidth()
+            .then(swipeDownModifier),
           horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -1066,7 +1128,12 @@ fun AudioPlayerControls(
           }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        Spacer(
+          modifier = Modifier
+            .fillMaxWidth()
+            .weight(1f)
+            .then(swipeDownModifier)
+        )
 
         // ── Cover art / animated wireframe sphere ────────────────────────────
         val haptic = LocalHapticFeedback.current
@@ -1078,11 +1145,13 @@ fun AudioPlayerControls(
             .graphicsLayer {
               scaleX = artScale
               scaleY = artScale
+              rotationZ = if (!displayVisualizer && !isRectangularVisualizer) vinylRotation.value else 0f
               this.shadowElevation = artElevation.toPx()
               this.shape = RoundedCornerShape(artCornerRadius)
               this.clip = true
             }
-            .clip(RoundedCornerShape(artCornerRadius)),
+            .clip(RoundedCornerShape(artCornerRadius))
+            .then(swipeDownModifier),
           shape = RoundedCornerShape(artCornerRadius),
           shadowElevation = artElevation,
           color = Color.Transparent,
@@ -1090,6 +1159,7 @@ fun AudioPlayerControls(
           Box(
             modifier = Modifier
               .fillMaxSize()
+              .then(swipeDownModifier)
               .combinedClickable(
                 onClick = {},
                 onLongClick = {
@@ -2254,26 +2324,12 @@ private fun ActionBarButton(
 private fun RotatingVinylDisc(
   modifier: Modifier = Modifier,
 ) {
-  val infiniteTransition = rememberInfiniteTransition(label = "disc_rotation")
-  val rotation by infiniteTransition.animateFloat(
-    initialValue = 0f,
-    targetValue = 360f,
-    animationSpec = infiniteRepeatable(
-      animation = tween(6000, easing = LinearEasing),
-      repeatMode = AnimRepeatMode.Restart
-    ),
-    label = "disc_rotation_anim"
-  )
-
   val primaryColor = MaterialTheme.colorScheme.primary
   val secondaryColor = MaterialTheme.colorScheme.secondary
   val onPrimaryColor = MaterialTheme.colorScheme.onPrimary
 
   Box(
-    modifier = modifier
-      .graphicsLayer {
-        rotationZ = rotation
-      },
+    modifier = modifier,
     contentAlignment = Alignment.Center,
   ) {
     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -2506,14 +2562,27 @@ private fun AudioCoverArt(
   bitmap: Bitmap?,
 ) {
   if (bitmap != null && !bitmap.isRecycled) {
-    Image(
-      bitmap = remember(bitmap) { bitmap.asImageBitmap() },
-      contentDescription = null,
-      contentScale = ContentScale.Crop,
-      modifier = Modifier
-        .fillMaxSize()
-        .background(MaterialTheme.colorScheme.surfaceVariant),
-    )
+    Box(
+      modifier = Modifier.fillMaxSize(),
+      contentAlignment = Alignment.Center,
+    ) {
+      Image(
+        bitmap = remember(bitmap) { bitmap.asImageBitmap() },
+        contentDescription = null,
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+          .fillMaxSize()
+          .background(MaterialTheme.colorScheme.surfaceVariant),
+      )
+      // Center spindle hole — gives authentic vinyl record aesthetic to the rotating artwork
+      Surface(
+        modifier = Modifier.size(24.dp),
+        shape = CircleShape,
+        color = Color(0xFF14151A),
+        border = BorderStroke(2.dp, Color(0xFFD4D6DC).copy(alpha = 0.85f)),
+        shadowElevation = 2.dp,
+      ) {}
+    }
   } else {
     Box(
       modifier = Modifier
